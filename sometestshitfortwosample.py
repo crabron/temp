@@ -6,6 +6,11 @@ Work only for couples. Ignor groups. Relise of preveous code, but more kinda int
 
 from __future__ import division, print_function
 from scipy.stats import fisher_exact as fisher
+from scipy.stats import chi2_contingency as chisq
+from scipy.stats import ttest_ind as ttest
+from scipy.stats import mannwhitneyu as man
+from scipy.stats import ranksums as wilc
+from scipy.stats import kruskal as krus
 from scipy import stats
 import getopt
 import biom
@@ -16,6 +21,8 @@ import numpy as np
 import itertools as it
 import operator
 import argparse
+from time import sleep
+import sys
 
 def filter_otu(otu_table, idfs):
     '''
@@ -90,8 +97,19 @@ def summall_od(otu_list,iddict, sumotudict):
         sumalldict.update({w[0]:sum_y})
     return sumalldict
 
+def otsa_od(otu_list,iddict):
+    '''
+    '''
+    otsa_od = OrderedDict()
+    for i in otu_list:
+        dpartbef = [a for a in iddict.values()]
+        dpart1 = [ftable.get_value_by_ids(i, a) for a in dpartbef[0]]
+        dpart2 = [ftable.get_value_by_ids(i, a) for a in dpartbef[1]]
+        otsa_od.update({i:[dpart1,dpart2]})
+    return otsa_od
 
-inp = "random_first.biom"
+
+inp = "sff_otu_table.biom"
 idfs = open("IDtestlist.txt", "r")
 otu_table = biom.load_table(inp)
 ftable = filter_otu(otu_table, idfs)
@@ -116,20 +134,107 @@ for i in sumotudict.items():
     other = map(operator.sub, summall , i[1])
     otherdict.update({i[0]:other})
 
-# bonff = 
-pfishdict = OrderedDict()
+# # bonff = 
+leno = len(otu_list)
+fj=0
+pdict = OrderedDict()
 for i in sumotudict.items():
+    fj+=1
     sum = i[1]
     other = otherdict.get(i[0])
     table = np.array([sum,
                     other])
-    # if sum[1] <= 5 or sum[0] <= 5 
-    p = fisher(table)[1]
-    pfishdict.update({i[0]:p})
-    print(p)
+    if sum[1] <= 5 or sum[0] <= 5: 
+        p = fisher(table)[1]
+        pdict.update({i[0]:p})
+    else:
+        p = chisq(table, lambda_="log-likelihood")[1]
+        pdict.update({i[0]:p})
+    
+    sys.stdout.write('\r')
+    sys.stdout.write("fisher {}/{}".format(fj,leno))
+    sys.stdout.flush()
+
+otuwsa_od = otsa_od(otu_list,iddict)
+
+tdict = OrderedDict()
+j=0
+for i in otu_list:
+    j+=1
+    a = otuwsa_od.get(i)[0]
+    b = otuwsa_od.get(i)[1]
+    p = ttest(a,b)[1]
+    tdict.update({i:p})
+   
+    sys.stdout.write('\r')
+    sys.stdout.write("ttest {}/{}".format(j,leno))
+    sys.stdout.flush()
 
 
+mdict = OrderedDict()
+mj=0
+for i in otu_list:
+    mj+=1
+    a = otuwsa_od.get(i)[0]
+    b = otuwsa_od.get(i)[1]
+    if np.sum(a) == 0 or np.sum(b) == 0:
+        p = "nan"
+    else:
+        p = man(a,b)[1]
+    mdict.update({i:p})
+    sys.stdout.write('\r')
+    sys.stdout.write("man-y {}/{}".format(mj,leno))
+    sys.stdout.flush()
 
+mdict = OrderedDict()
+mw=0
+for i in otu_list:
+    mw+=1
+    a = otuwsa_od.get(i)[0]
+    b = otuwsa_od.get(i)[1]
+    p = wilc(a,b)[1]
+    mdict.update({i:p})
+    sys.stdout.write('\r')
+    sys.stdout.write("man-y {}/{}".format(mw,leno))
+    sys.stdout.flush()
+
+kdict = OrderedDict()
+kw=0
+for i in otu_list:
+    kw+=1
+    a = otuwsa_od.get(i)[0]
+    b = otuwsa_od.get(i)[1]
+    p = wilc(a,b)[1]
+    mdict.update({i:p})
+    sys.stdout.write('\r')
+    sys.stdout.write("kruskal {}/{}".format(kw,leno))
+    sys.stdout.flush()
+
+with open("results.txt", "w") as results:
+    print("otu", "fisher or chi", "t-test","krus" sep="\t", end="\n", file=results)
+    for i in otu_list:
+        fp = pdict.get(i)
+        tp = tdict.get(i)
+        mp = mdict.get(i)
+        otusam1 = otuwsa_od.get(i)[0]
+        otusam2 = otuwsa_od.get(i)[1]
+        print(i, fp, tp, kw, otusam1, otusam2, sep="\t", end="\n", file=results)
+
+with open("log.txt", "w") as log:
+    qf=0
+    qt=0
+    for i in otu_list:
+        fp = pdict.get(i)
+        tp = tdict.get(i)
+        otusam1 = otuwsa_od.get(i)[0]
+        otusam2 = otuwsa_od.get(i)[1]
+        if fp <= 0.05:
+            qf+=1
+
+        if tp <= 0.05:
+            qt+=1
+
+    print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
 
 idfs.close()
 # hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
