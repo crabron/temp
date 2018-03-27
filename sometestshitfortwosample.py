@@ -47,9 +47,9 @@ def filter_otu(otu_table, idfs):
     return new_table
 
 
-def group_sample(sample_list):
+def iddict(sample_list):
     '''
-    Return list of sample ids, with groupped in one list repetitions.
+    Ordered dict with groupped otu sample: key - master, value - master replication
     '''
     samplesame_list = []
     for i in sample_list: 
@@ -63,7 +63,10 @@ def group_sample(sample_list):
             if ia.startswith(i):
                 la.append(ia)
         sorted_sample.append(la)
-    return sorted_sample
+    key_id = [re.split(r'.\d',i[0])[0] for i in sorted_sample]
+    zipl = zip(key_id,sorted_sample)
+    iddict = OrderedDict(zipl)
+    return iddict
 
 
 def summotu_od(otu_list,iddict):
@@ -202,14 +205,40 @@ def biom_rel_filter(pdict, new_table):
     fd = new_table.filter(fdd, axis='observation', inplace=False)
     return fd
 
-# def fbiom_differ(fd,iddict,sumotudict):
-#     sumo = np.sum(sumotudict.values())
-#     otu = sumotudict.keys()
-#     print(iddict)
-#     print(otu)
-#     fbd = [values[1] for values, id, metadata in fd.iter()]
-#     # part_fd = [ d/sumo for d in fd.get_value_by_ids()]
-#     return fbd
+def fbiom_differ(sumotudict, f_sumotudict):
+    '''division and subtration parts with each other'''
+    sumo = np.sum(sumotudict.values())
+    f_part = OrderedDict()
+    for d in f_sumotudict.items():
+        partl = []
+        for i in d[1]:
+            part = i/sumo
+            partl.append(part)
+        key = d[0]
+        f_part.update({d[0]:partl})
+    fddiv = OrderedDict()
+    part_1 = OrderedDict()
+    part_2 = OrderedDict()
+    for d in f_part.items():
+        key = d[0]
+        w = d[1]
+        if w[0] == 0:
+            div = 1
+        elif w[1] == 0:
+            div = 0
+        else:
+            div = w[0] / w[1]
+        part_1.update({key:w[0]})
+        part_2.update({key:w[1]})
+        fddiv.update({key:div})
+    fdsub = OrderedDict()
+    for d in f_part.items():
+        key = d[0]
+        w = d[1]
+        sub = w[0] - w[1]
+        fdsub.update({key:sub})
+    # part_fd = [ d/sumo for d in ]
+    return fddiv, fdsub, part_1, part_2
     
 
 
@@ -219,22 +248,24 @@ otu_table = biom.load_table(inp)
 ftable = filter_otu(otu_table, idfs) #filtered biom table
 sample_list = ftable.ids(axis='sample') #all sample ids
 otu_list = ftable.ids(axis='observation') #all obs ids(otus)
-gs = group_sample(sample_list)  #groupped
-key_id = [re.split(r'.\d',i[0])[0] for i in gs]
-zipl = zip(key_id,gs)
-iddict = OrderedDict(zipl)
-otuwsa_od = otsa_od(otu_list,iddict)
-sumotudict = summotu_od(otu_list,iddict)
-sumalldict = summall_od(otu_list,iddict, sumotudict)
-pvalues = sometests(sumotudict,otuwsa_od)
-p_dict = pvalues[0]
-fd = biom_rel_filter(p_dict, ftable)
-# fb_d = fbiom_differ(fd, iddict, sumotudict)
-print(gs)
-print(zipl)
+f_iddict = iddict(sample_list)  #groupped otu sample: key - master, value - master replication
+otuwsa_od = otsa_od(otu_list,f_iddict) 
+sumotudict = summotu_od(otu_list,f_iddict) 
+sumalldict = summall_od(otu_list,f_iddict, sumotudict) 
+pvalues = sometests(sumotudict,otuwsa_od) 
+p_dict = pvalues[0] 
+fd = biom_rel_filter(p_dict, ftable) 
+# fb_d = fbiom_differ(fd, f_iddict, sumotudict)
 
-# start doing monkey job again
+# start doing monkey job again for new filtered OTU table
 
+fsample_list = fd.ids(axis='sample')
+s_otu_list = fd.ids(axis='observation')
+s_iddict = iddict(fsample_list) 
+otuwsa_od = otsa_od(s_otu_list,s_iddict) 
+f_sumotudict = summotu_od(s_otu_list,s_iddict) 
+fbd = fbiom_differ(sumotudict, f_sumotudict)
+print(fbd)
 
 
 # with open("pval.txt", "w") as pval:
@@ -250,20 +281,8 @@ print(zipl)
 #         otusam2 = otuwsa_od.get(i)[1]
 #         print(i, fp, tp, kp, sep="\t", end="\n", file=pval)
 
-
-
-
-
-
-
-
-
-
-
-
-
 # with open("log.txt", "w") as log:
-#     qf=0
+#     qf=0s
 #     qt=0
 #     for i in otu_list:
 #         pdict = pvalues[0]
@@ -272,14 +291,26 @@ print(zipl)
 #         tp = tdict.get(i)
 #         otusam1 = otuwsa_od.get(i)[0]
 #         otusam2 = otuwsa_od.get(i)[1]
-#         if fp <= 0.05:
+#         if fp <= 0.05:pe
 #             qf+=1
 
 #         if tp <= 0.05:
 #             qt+=1
 
-#     print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
+with open("subdel.txt", "w") as out:
+    print("otu", "division", "subtration","part_1","part_2", sep="\t", end="\n", file=out)
+    for i in s_otu_list:
+        fbd_div = fbd[0]
+        fbd_sub = fbd[1]
+        fbd_p1 = fbd[2]
+        fbd_p2 = fbd[3]
+        div = fbd_div.get(i)
+        sub = fbd_sub.get(i)
+        p1 = fbd_p1.get(i)
+        p2 = fbd_p2.get(i)
+        print(i, div,sub, p1, p2, sep="\t", end="\n", file=out)
 
+#     print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
 
 idfs.close()
     # hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
