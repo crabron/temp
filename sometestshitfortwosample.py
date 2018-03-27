@@ -24,6 +24,9 @@ import argparse
 from time import sleep
 import sys
 
+
+
+
 def filter_otu(otu_table, idfs):
     '''
     Filter biom table by sample Id from mapping txt file.
@@ -39,6 +42,7 @@ def filter_otu(otu_table, idfs):
                     al_ll.append(i)
         else:
             al_ll.append(a)
+
     new_table = otu_table.filter(al_ll,axis='sample', inplace=False)
     return new_table
 
@@ -99,6 +103,7 @@ def summall_od(otu_list,iddict, sumotudict):
 
 def otsa_od(otu_list,iddict):
     '''
+    Ordered dict with a pair lists in values for tested samples.
     '''
     otsa_od = OrderedDict()
     for i in otu_list:
@@ -108,138 +113,178 @@ def otsa_od(otu_list,iddict):
         otsa_od.update({i:[dpart1,dpart2]})
     return otsa_od
 
+def sometests(sumotudict,otuwsa_od):
 
-inp = "sff_otu_table.biom"
+    '''
+    This function consists of statistical tests, that calculate p-value for our data.
+    This is my  shiny shit castle of crap, which really lacks some order.
+    Return orderdicts with pairs like  otu:p-value: 
+    fisher/chi2(if sum from some sample more than 5)[0]
+    ttest [1]
+    kruskal[2]
+    '''
+
+    otherdict = OrderedDict()
+    summall = sumalldict.values()
+    for i in sumotudict.items():
+        other = map(operator.sub, summall , i[1])
+        otherdict.update({i[0]:other})
+
+    # # bonff = 
+    leno = len(otu_list)
+    fj=0
+    pdict = OrderedDict()
+    for i in sumotudict.items():
+        fj+=1
+        sum = i[1]
+        other = otherdict.get(i[0])
+        table = np.array([sum,
+                        other])
+        if sum[1] <= 5 or sum[0] <= 5: 
+            p = fisher(table)[1]
+            pdict.update({i[0]:p})
+        else:
+            p = chisq(table, lambda_="log-likelihood")[1]
+            pdict.update({i[0]:p})
+        
+        sys.stdout.write('\r')
+        sys.stdout.write("fisher {}/{}".format(fj,leno))
+        sys.stdout.flush()
+
+    tdict = OrderedDict()
+    j=0
+    for i in otu_list:
+        j+=1
+        a = otuwsa_od.get(i)[0]
+        b = otuwsa_od.get(i)[1]
+        p = ttest(a,b)[1]
+        if p != p:
+            p = 1
+        tdict.update({i:p})
+
+        sys.stdout.write('\r')
+        sys.stdout.write("ttest {}/{}".format(j,leno))
+        sys.stdout.flush()
+
+    # mdict = OrderedDict()
+    # mj=0
+    # for i in otu_list:
+    #     mj+=1
+    #     a = otuwsa_od.get(i)[0]
+    #     b = otuwsa_od.get(i)[1]
+    #     if np.sum(a) == 0 or np.sum(b) == 0:
+    #         p = "nan"
+    #     else:
+    #         p = man(a,b)[1]
+    #     mdict.update({i:p})
+    #     sys.stdout.write('\r')
+    #     sys.stdout.write("man-y {}/{}".format(mj,leno))
+    #     sys.stdout.flush()
+
+    kdict = OrderedDict()
+    kw=0
+    for i in otu_list:
+        kw+=1
+        a = otuwsa_od.get(i)[0]
+        b = otuwsa_od.get(i)[1]
+        p = wilc(a,b)[1]
+        kdict.update({i:p})
+        sys.stdout.write('\r')
+        sys.stdout.write("kruskal {}/{}".format(kw,leno))
+        sys.stdout.flush()
+    
+    sys.stdout.write('\r')
+    
+    return pdict, tdict, kdict
+
+def biom_rel_filter(pdict, new_table):
+    fdd = [d[0] for d in pdict.items() if d[1] <= 0.05]
+    fd = new_table.filter(fdd, axis='observation', inplace=False)
+    return fd
+
+# def fbiom_differ(fd,iddict,sumotudict):
+#     sumo = np.sum(sumotudict.values())
+#     otu = sumotudict.keys()
+#     print(iddict)
+#     print(otu)
+#     fbd = [values[1] for values, id, metadata in fd.iter()]
+#     # part_fd = [ d/sumo for d in fd.get_value_by_ids()]
+#     return fbd
+    
+
+
+inp = "nice_little_table.biom"
 idfs = open("IDtestlist.txt", "r")
-otu_table = biom.load_table(inp)
-ftable = filter_otu(otu_table, idfs)
-sample_list = ftable.ids(axis='sample')
-otu_list = ftable.ids(axis='observation')
-
-gs = group_sample(sample_list)
-
+otu_table = biom.load_table(inp) 
+ftable = filter_otu(otu_table, idfs) #filtered biom table
+sample_list = ftable.ids(axis='sample') #all sample ids
+otu_list = ftable.ids(axis='observation') #all obs ids(otus)
+gs = group_sample(sample_list)  #groupped
 key_id = [re.split(r'.\d',i[0])[0] for i in gs]
 zipl = zip(key_id,gs)
 iddict = OrderedDict(zipl)
-
+otuwsa_od = otsa_od(otu_list,iddict)
 sumotudict = summotu_od(otu_list,iddict)
 sumalldict = summall_od(otu_list,iddict, sumotudict)
+pvalues = sometests(sumotudict,otuwsa_od)
+p_dict = pvalues[0]
+fd = biom_rel_filter(p_dict, ftable)
+# fb_d = fbiom_differ(fd, iddict, sumotudict)
+print(gs)
+print(zipl)
+
+# start doing monkey job again
+
+
+
+# with open("pval.txt", "w") as pval:
+#     print("otu", "fisher or chi", "t-test","krus", sep="\t", end="\n", file=results)
+#     for i in otu_list:
+#         pd = pvalues[0]
+#         td = pvalues[1]
+#         kd = pvalues[2]
+#         fp = pd.get(i)
+#         tp = td.get(i)
+#         kp = kd.get(i)
+#         otusam1 = otuwsa_od.get(i)[0]
+#         otusam2 = otuwsa_od.get(i)[1]
+#         print(i, fp, tp, kp, sep="\t", end="\n", file=pval)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# with open("log.txt", "w") as log:
+#     qf=0
+#     qt=0
+#     for i in otu_list:
+#         pdict = pvalues[0]
+
+#         fp = pdict.get(i)
+#         tp = tdict.get(i)
+#         otusam1 = otuwsa_od.get(i)[0]
+#         otusam2 = otuwsa_od.get(i)[1]
+#         if fp <= 0.05:
+#             qf+=1
+
+#         if tp <= 0.05:
+#             qt+=1
+
+#     print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
 
 
 idfs.close()
-
-otherdict = OrderedDict()
-summall = sumalldict.values()
-for i in sumotudict.items():
-    other = map(operator.sub, summall , i[1])
-    otherdict.update({i[0]:other})
-
-# # bonff = 
-leno = len(otu_list)
-fj=0
-pdict = OrderedDict()
-for i in sumotudict.items():
-    fj+=1
-    sum = i[1]
-    other = otherdict.get(i[0])
-    table = np.array([sum,
-                    other])
-    if sum[1] <= 5 or sum[0] <= 5: 
-        p = fisher(table)[1]
-        pdict.update({i[0]:p})
-    else:
-        p = chisq(table, lambda_="log-likelihood")[1]
-        pdict.update({i[0]:p})
-    
-    sys.stdout.write('\r')
-    sys.stdout.write("fisher {}/{}".format(fj,leno))
-    sys.stdout.flush()
-
-otuwsa_od = otsa_od(otu_list,iddict)
-
-tdict = OrderedDict()
-j=0
-for i in otu_list:
-    j+=1
-    a = otuwsa_od.get(i)[0]
-    b = otuwsa_od.get(i)[1]
-    p = ttest(a,b)[1]
-    tdict.update({i:p})
-   
-    sys.stdout.write('\r')
-    sys.stdout.write("ttest {}/{}".format(j,leno))
-    sys.stdout.flush()
-
-
-mdict = OrderedDict()
-mj=0
-for i in otu_list:
-    mj+=1
-    a = otuwsa_od.get(i)[0]
-    b = otuwsa_od.get(i)[1]
-    if np.sum(a) == 0 or np.sum(b) == 0:
-        p = "nan"
-    else:
-        p = man(a,b)[1]
-    mdict.update({i:p})
-    sys.stdout.write('\r')
-    sys.stdout.write("man-y {}/{}".format(mj,leno))
-    sys.stdout.flush()
-
-mdict = OrderedDict()
-mw=0
-for i in otu_list:
-    mw+=1
-    a = otuwsa_od.get(i)[0]
-    b = otuwsa_od.get(i)[1]
-    p = wilc(a,b)[1]
-    mdict.update({i:p})
-    sys.stdout.write('\r')
-    sys.stdout.write("man-y {}/{}".format(mw,leno))
-    sys.stdout.flush()
-
-kdict = OrderedDict()
-kw=0
-for i in otu_list:
-    kw+=1
-    a = otuwsa_od.get(i)[0]
-    b = otuwsa_od.get(i)[1]
-    p = wilc(a,b)[1]
-    mdict.update({i:p})
-    sys.stdout.write('\r')
-    sys.stdout.write("kruskal {}/{}".format(kw,leno))
-    sys.stdout.flush()
-
-with open("results.txt", "w") as results:
-    print("otu", "fisher or chi", "t-test","krus" sep="\t", end="\n", file=results)
-    for i in otu_list:
-        fp = pdict.get(i)
-        tp = tdict.get(i)
-        mp = mdict.get(i)
-        otusam1 = otuwsa_od.get(i)[0]
-        otusam2 = otuwsa_od.get(i)[1]
-        print(i, fp, tp, kw, otusam1, otusam2, sep="\t", end="\n", file=results)
-
-with open("log.txt", "w") as log:
-    qf=0
-    qt=0
-    for i in otu_list:
-        fp = pdict.get(i)
-        tp = tdict.get(i)
-        otusam1 = otuwsa_od.get(i)[0]
-        otusam2 = otuwsa_od.get(i)[1]
-        if fp <= 0.05:
-            qf+=1
-
-        if tp <= 0.05:
-            qt+=1
-
-    print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
-
-idfs.close()
-# hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
-# i = otu_table.iter_data()
-    # ind = sumotudict.keys().index(i)
-    # indm = ind + 1 in enumerate(zip(otu_list[:-1], otu_list[1:]))
-    # sum2 = sumotudict.values()[indm]
-
+    # hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
+    # i = otu_table.iter_data()
+        # ind = sumotudict.keys().index(i)
+        # indm = ind + 1 in enumerate(zip(otu_list[:-1], otu_list[1:]))
+        # sum2 = sumotudict.values()[indm]
+        
