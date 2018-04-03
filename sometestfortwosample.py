@@ -26,6 +26,7 @@ import sys
 from sys import argv
 import pandas
 import math
+from pprint import pprint 
 
 inp = argv[1]
 ID = argv[2]
@@ -45,10 +46,9 @@ def filter_otu(otu_table, idfs):
                     al_ll.append(i)
         else:
             al_ll.append(a)
-
+    
     new_table = otu_table.filter(al_ll,axis='sample', inplace=False)
     return new_table
-
 
 def iddict(sample_list):
     '''
@@ -71,6 +71,10 @@ def iddict(sample_list):
     iddict = OrderedDict(zipl)
     return iddict
 
+def delete_minors(summoldict, ftable): 
+    otu_del = [ d[0] for d in summoldict.items() if summoldict.get(d[0])[0] >= 6 and summoldict.get(d[0])[1] ]
+    dtable = ftable.filter(otu_del,axis='observation', inplace=False)   
+    return dtable
 
 def summotu_od(otu_list,iddict):
     '''
@@ -239,6 +243,7 @@ def fbiom_differ(sumotudict, f_sumotudict, sumalldict):
         fdsub.update({key:sub})
     return fddiv, fdsub, part
     
+    
 
 
 idfs = open(ID, "r")
@@ -247,6 +252,7 @@ sys.stdout.write('\r')
 sys.stdout.write("Prepare biom table for analysis")
 sys.stdout.flush()
 
+'''mainflow'''
 
 otu_table = biom.load_table(inp) 
 ftable = filter_otu(otu_table, idfs) #filtered biom table
@@ -254,19 +260,28 @@ sample_list = ftable.ids(axis='sample') #all sample ids
 otu_list = ftable.ids(axis='observation') #all obs ids(otus)
 f_iddict = iddict(sample_list)  #groupped otu sample: key - master, value - master replication
 otuwsa_od = otsa_od(otu_list,f_iddict) 
+
+''' part with '''
+
 sumotudict = summotu_od(otu_list,f_iddict) 
+table_del = delete_minors(sumotudict, ftable)
+
+'''hop, hop pseudozeros and minor otu eliminating'''
+
+
+
+
 sumalldict = summall_od(otu_list,f_iddict, sumotudict)
 pvalues = sometests(sumotudict,otuwsa_od) 
 p_dict = pvalues[0] 
 fd = biom_rel_filter(p_dict, ftable) 
 
-# fb_d = fbiom_differ(fd, f_iddict, sumotudict)
 
-# start doing monkey job again for new filtered OTU table
+'''start doing monkey job again for new filtered OTU table'''
+
 sys.stdout.write('\r')
 sys.stdout.write("Doing divisions and subtrations for greater good.")
 sys.stdout.flush()
-
 
 fsample_list = fd.ids(axis='sample')
 s_otu_list = fd.ids(axis='observation')
@@ -318,7 +333,15 @@ with open("subdel.txt", "w") as out:
 
 #     print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
 
+sys.stdout.write('\r')
+sys.stdout.write("\r")
+sys.stdout.flush()
+
+print(table_del)
+pprint(s_iddict)
+
 idfs.close()
+
     # hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
     # i = otu_table.iter_data()
         # ind = sumotudict.keys().index(i)
