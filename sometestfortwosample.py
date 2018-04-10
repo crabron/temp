@@ -38,8 +38,7 @@ def filter_otu(inp, idfs):
     Filter biom table by sample Id from mapping txt file.
     '''
     otu_table = biom.load_table(inp)
-    al = idfs.read()
-    al_l =[line.rstrip() for line in al.split("\t")]
+    al_l =[line.rstrip() for line in idfs.split("\t")]
     al_ll = []
     for a in al_l:
         if re.search(r'\D\Z',a):
@@ -158,7 +157,7 @@ def fdelete_minors_ab(sumotudict, ftable):
 def fdelete_minors_part(ftable, part, part_in):
     a = float(part_in)
     otu_del = [ d[0] for d in part.items() if part.get(d[0])[0] >= a or part.get(d[0])[1]>= a]
-    ftable_ab = ftable.filter(otu_del,axis='observation', inplace=False) 
+    ftable_ab = ftable.filter(otu_del, axis='observation', inplace=False) 
     return ftable_ab
 
 def fsometests(sumotudict, ftable, iddict, sumalldict, otu_list, whattest="chi2"):
@@ -291,12 +290,12 @@ def main(inp, ID, part_in):
 
 
 
-    idfs = open(ID, "r")
-    
+    idfs = ID
 
     sys.stdout.write('\r')
     sys.stdout.write("Prepare biom table for analysis")
     sys.stdout.flush()
+
 
     ftable = filter_otu(inp, idfs) #filtered biom table
     iddict = fiddict(ftable)
@@ -312,17 +311,12 @@ def main(inp, ID, part_in):
     pdict = fsometests(f_sumotudict, ftable_ab, f_iddict, sumalldict, f_otu_list, whattest)
     ftable_ab_pv = ftable_del_pval(pdict, ftable_ab)
 
-    # os.system("biom convert -i {} -o temp.txt --to-tsv --header-key taxonomy".format(inp)
-
-
-    # os.system("biom convert -i temp.txt -o {} --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy"
-
     f_iddict = fiddict(ftable_ab_pv)
     f_otu_list = ftable_ab_pv.ids(axis='observation')
     f_sumotudict = fsumotudict(ftable_ab_pv, f_otu_list, f_iddict)
 
 
-    fdsub, part = fbiom_differ(f_sumotudict, sumalldict)
+    fdiv, part = fbiom_differ(f_sumotudict, sumalldict)
     ftable_ab_pa = fdelete_minors_part(ftable_ab_pv, part, part_in)
 
     a_iddict = fiddict(ftable_ab_pa)
@@ -330,7 +324,6 @@ def main(inp, ID, part_in):
     a_sumotudict = fsumotudict(ftable_ab_pa, a_otu_list, a_iddict)
     # a_sumotudict_pseudo = pseudoc(a_sumotudict)
     div, part = fbiom_differ(a_sumotudict, sumalldict)
-
     return div, part
     
 # if __name__ == "__main__":
@@ -410,14 +403,22 @@ def USELESS():
 # if not os.path.exists("script"):
 #     os.makedirs("script")
 
-with open("script/subdel.txt", "w") as out:
-    print("otu", "division","part_1","part_2", sep="\t", end="\n", file=out)
-    div, part = main(inp, ID, part_in)
-    for i in part.keys():
-        fdiv = div.get(i)
-        p1 = part.get(i)[0]
-        p2 = part.get(i)[1]
-        print(i, fdiv, p1, p2, sep="\t", end="\n", file=out)
+if not os.path.exists("script"):
+    os.makedirs("script")
+with open(ID, "r") as idfile:
+    idf = idfile.readlines()
+    for i in idf:
+        div, part = main(inp, i, part_in)
+        d = i.rstrip()
+        b = d.split("\t")
+        a = "_".join(b)
+        with open("script/subdel_{}.txt".format(a), "a") as out:
+            print("otu", "division","part_1","part_2",whattest, sep="\t", end="\n", file=out)
+            for i in part.keys():
+                fdiv = div.get(i)
+                p1 = part.get(i)[0]
+                p2 = part.get(i)[1]
+                print(i, fdiv, p1, p2, sep="\t", end="\n", file=out)
 
     # print("fisher, chi ={}".format(qf),"ttest ={}".format(qt),  sep="\t", end="\n", file=log )
 
