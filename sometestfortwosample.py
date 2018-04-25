@@ -11,6 +11,7 @@ from scipy.stats import ttest_ind as ttest
 from scipy.stats import mannwhitneyu as man
 from scipy.stats import ranksums as wilc
 from scipy.stats import kruskal as krus
+import itertools
 from scipy import stats
 import getopt
 import biom
@@ -28,11 +29,30 @@ import pandas
 import math
 import os
 import matplotlib.pyplot as plt
+import json
 
 inp = argv[1]
-ID = argv[2]
+if argv[2] == 'all':
+    otu_table = biom.load_table(inp)
+    sample_list = otu_table.ids(axis='sample')
+    atata = []
+    for a in sample_list:
+        i = a.split('.')
+        ca = i[:-1]
+        caa = ".".join(ca)
+        atata.append(caa)
+    at_set = set(atata)
+    w=[i for i in itertools.combinations(at_set, 2)]
+    with open('temp2.txt', 'a') as ID:
+        for i in w:
+            ID.write(i[0] + '\t' + i[1]+ '\n')
+    ID = 'temp2.txt'
+else:
+    ID = argv[2]
+
 part_in = argv[3]
 whattest = argv[4]
+
 
 def filter_otu(inp, idfs):
     '''
@@ -40,15 +60,12 @@ def filter_otu(inp, idfs):
     '''
     otu_table = biom.load_table(inp)
     al_l =[line.rstrip() for line in idfs.split("\t")]
+    sample_list = otu_table.ids(axis='sample')
     al_ll = []
     for a in al_l:
-        if re.search(r'\D\Z',a):
-            sample_list = otu_table.ids(axis='sample')
-            for i in sample_list: 
-                if i.startswith(a):
-                    al_ll.append(i)
-        else:
-            al_ll.append(a)
+        for i in sample_list:
+            if i.startswith(a):
+                al_ll.append(i)
     
     new_table = otu_table.filter(al_ll,axis='sample', inplace=False)
     return new_table
@@ -57,22 +74,37 @@ def fiddict(ftable):
     '''
     Ordered dict with groupped otu sample: key - master, value - master replication
     '''
-    samplesame_list = []
+    arr = []
     sample_list = ftable.ids(axis='sample')
-    for i in sample_list: 
-        q = re.match(r'\D+', i)
-        samplesame_list.append(q.group())
-    sampledd_list = list(OrderedDict.fromkeys(samplesame_list))
-    sorted_sample = []
-    for i in sampledd_list:
-        la = []
-        for ia in sample_list:
-            if ia.startswith(i):
-                la.append(ia)
-        sorted_sample.append(la)
-    key_id = [re.split(r'.\d',i[0])[0] for i in sorted_sample]
-    zipl = zip(key_id,sorted_sample)
-    iddict = OrderedDict(zipl)
+    for i in sample_list:
+        a = i.split('.')
+        ca = a[:-1]
+        caa = '.'.join(ca)
+        arr.append(caa)
+    ass = list(set(arr))
+    v0 = [i for i in sample_list if i.startswith(ass[0])]
+    v1 = [i for i in sample_list if i.startswith(ass[1])]
+    iddict = {ass[0]:v0, ass[1]:v1}
+
+    
+    
+    
+    # samplesame_list = []
+    # sample_list = ftable.ids(axis='sample')
+    # for i in sample_list: 
+    #     q = re.match(r'\D+', i)
+    #     samplesame_list.append(q.group())
+    # sampledd_list = list(OrderedDict.fromkeys(samplesame_list))
+    # sorted_sample = []
+    # for i in sampledd_list:
+    #     la = []
+    #     for ia in sample_list:
+    #         if ia.startswith(i):
+    #             la.append(ia)
+    #     sorted_sample.append(la)
+    # key_id = [re.split(r'.\d',i[0])[0] for i in sorted_sample]
+    # zipl = zip(key_id,sorted_sample)
+    # iddict = OrderedDict(zipl)
     return iddict
 
 def fsumotudict(ftable, otu_list, iddict):
@@ -314,13 +346,21 @@ def log(pdict, div, ftable_ab_pa, idfs, a_sumotudict):
 
         llmore = [a[0] for a in div.items() if a[1] >=1]
         lmore = [ a for a in llmore if a in nu_sumotudict.keys()]
-        lenlmore = len(lmore)
+        lenlmore_1 = len(lmore)
 
         lless = [a[0] for a in div.items() if a[1] <=1]
         less = [ a for a in lless if a in nu_sumotudict.keys()]
-        lenlless = len(less)
+        lenlless_1 = len(less)
 
-        print(idfs, unic1 ,unic2,  lenlconst, lenlmore, lenlless, sep="\t", end="\n", file=log)
+        lenlmore_2 = lenlless_1
+        lenlless_2 = lenlmore_1
+
+        otusum = len(a_sumotudict)
+
+
+
+
+        print(idfs,otusum , unic1 ,unic2,  lenlconst, lenlmore_1, lenlless_1, lenlmore_2, lenlless_2, sep="\t", end="\n", file=log)
     return
 
 def main(inp, ID, part_in):
@@ -331,14 +371,19 @@ def main(inp, ID, part_in):
     sys.stdout.write("Prepare biom table for analysis")
     sys.stdout.flush()
 
-
+    
     ftable = filter_otu(inp, idfs) #filtered biom table
     iddict = fiddict(ftable)
+
     otu_list = ftable.ids(axis='observation')
     sumotudict = fsumotudict(ftable, otu_list, iddict)
+    # with open('log.txt', 'w') as sss:
+    #     sss.write(json.dumps(sumotudict))
+    #     sss.write(json.dumps(iddict))
+        
     sumalldict = fsumalldict(otu_list, iddict, sumotudict)
+    
     ftable_ab = fdelete_minors_ab(sumotudict, ftable)
-
     f_iddict = fiddict(ftable_ab)
     f_otu_list = ftable_ab.ids(axis='observation')
     f_sumotudict = fsumotudict(ftable_ab, f_otu_list, f_iddict)
@@ -379,10 +424,16 @@ def fancies(div, part):
 if not os.path.exists("script"):
     os.makedirs("script")
 with open("script/log.txt", "a") as l:
-    print("name", "unic_1", "unic_2", "allsame", "more_in1", "less_in1", sep="\t", end="\n", file=l)
+    print("name_for_pair", "summ", "unic_for_1", "unic_for_2", "general", "increase_in_1","decrease_in_2","increase_in_1","decrease_in_2", sep="\t", end="\n", file=l)
 with open(ID, "r") as idfile:
     idf = idfile.readlines()
+    fjl=0
+    ss = len(idf)
     for i in idf:
+        sys.stdout.write('\r')
+        fjl+=1
+        sys.stdout.write("{} {}/{}'\n'".format(i,fjl,ss))
+        sys.stdout.flush()
         div, part, pdict, ftable_ab_pa, fa_sumotudict = main(inp, i, part_in)
         d = i.rstrip()
         b = d.split("\t")
@@ -391,13 +442,13 @@ with open(ID, "r") as idfile:
         with open("script/subdel_{}.txt".format(a), "w") as out:
             print("otu", "division","part_1","part_2",whattest, sep="\t", end="\n", file=out)
             for i in part.keys():
-                ffdiv = div.get(i)
+                fdiv = div.get(i)
                 p1 = part.get(i)[0]
                 p2 = part.get(i)[1]
-                if ffdiv <= 1:
-                    fdiv = 1/ffdiv
-                else:
-                    fdiv = ffdiv
+                # if ffdiv <= 1:
+                #     fdiv = 1/ffdiv
+                # else:
+                #     fdiv = ffdiv
                     
                 print(i, fdiv, p1, p2, sep="\t", end="\n", file=out)
 
@@ -407,6 +458,7 @@ sys.stdout.write('\r')
 sys.stdout.write("\r")
 sys.stdout.flush()
 
+os.remove('temp2.txt')
     # hmn = [otu_table.get_value_by_ids('denovo228',i) for i in u]
     # i = otu_table.iter_data()
         # ind = sumotudict.keys().index(i)
