@@ -15,10 +15,25 @@ import shutil
 import traceback
 import time
 import collections
+import argparse
 
+'''
+Require openpyxl module for Excel table export.
+Convert data to proportion. Use Man-Whitney stats for pvalue calculation. Run-time version of code.
+Input - biom table in h5py format. Output - pairwise xlsx files with OTU proporion with taxonomic, csv log file with data of OTU quantity adjustment.
+. Require text file with tab delimiter between compared samples and unix line break between sample pairs
+'''
 
-inp = argv[1]
-if argv[2] == 'all':
+parser = argparse.ArgumentParser(description="weee")
+parser.add_argument("-t", "--treshold", help="Treshold of proportion. Default - 0.005",action="store", dest="tresh",default='0.005')
+parser.add_argument("-i", "--imput", help="imput biom table",action="store", dest="inp",required=True)
+parser.add_argument("-m", "--map", help="ID list mapping file",action='store', default="all", dest="map")
+args = parser.parse_args()
+parser.print_help()
+
+tresh = args.tresh
+inp = args.inp
+if args.map == 'all':
     otu_table = biom.load_table(inp)
     sample_list = otu_table.ids(axis='sample')
     atata = []
@@ -34,7 +49,7 @@ if argv[2] == 'all':
             ID.write(i[0] + '\t' + i[1]+ '\n')
     ID = 'temp2.txt'
 else:
-    ID = argv[2]
+    ID = args.map
 
 def benchmark(func):
     def wrapper(*args, **kwargs):
@@ -44,32 +59,27 @@ def benchmark(func):
         return res
     return wrapper
 
-@benchmark
 def del_singltones(inp):
     otu_table = biom.load_table(inp)
     a = [i for i in otu_table.iter_data(axis="observation")]
     b = [i for i in a if sum(i)>5]
 
-@benchmark
 def ratiometr(ftable, ilist):  
-    left = [i for i in ftable.columns.values if i.startswith(ilist[0])]
-    right = [i for i in ftable.columns.values if i.startswith(ilist[1])]
-    sum1 = ftable[left].sum().sum().sum()
-    sum2 = ftable[right].sum().sum().sum()
-    rtableleft = ftable[left].apply(lambda row: row/sum1)
-    rtableright = ftable[right].apply(lambda row: row/sum2)
-    table = pandas.concat([rtableleft, rtableright, ftable.taxonomy], axis=1, join='inner')
-    return left, right, table, sum1, sum2
+    left = [i for i in ftable.columns.values if i.rsplit('.', 1)[0] == ilist[0]]
+    right = [i for i in ftable.columns.values if i.rsplit('.', 1)[0] == ilist[1]]
+    both = left + right
+    summ = ftable[both].sum()
+    rtable = ftable[both]/summ
+    table = pandas.concat([rtable, ftable.taxonomy], axis=1, join='inner')
+    return left, right, table, summ
 
-@benchmark
-def ratfilt(left, right, table):
+def ratfilt(left, right, table, tresh):
     table['mean1'] = table[left].apply(lambda row: sum(row)/len(row),axis=1)
     table['mean2'] = table[right].apply(lambda row: sum(row)/len(row),axis=1)
-    ftable = table.ix[(table['mean1'] >= 0.005) | (table['mean2'] >= 0.005)]
+    ftable = table.ix[(table['mean1'] >= float(tresh)) | (table['mean2'] >= float(tresh))]
     return ftable
 
 
-@benchmark
 def man_y(rttable,left, right):
     def many(x,y):
         f = man(x,y, use_continuity=True, alternative=None)[1]
@@ -78,7 +88,6 @@ def man_y(rttable,left, right):
     rttable['pvalue'] = rttable.apply(lambda x: many(x[left],x[right]),axis=1)
     return rttable
 
-@benchmark
 def filter_otu(inp, idfs):
     '''
     Filter biom table by sample Id from mapping txt file.
@@ -89,7 +98,6 @@ def filter_otu(inp, idfs):
     new_table = otu_table.filter(ll,axis='sample', inplace=False)
     return new_table
 
-@benchmark
 def log(out, table,ilist):
     idfs = '_'.join(ilist)
     summ = table.count()[0]
@@ -97,41 +105,33 @@ def log(out, table,ilist):
     t_unic2 = table[(table.mean2 > 0) & (table.mean1 == 0)].count()[0]
     table_gen = table.ix[(table.mean1 > 0) & (table.mean2 > 0)]
     general = table_gen.count()[0]
-    increase_in_1 = table_gen[(table.mean1 > table.mean2) & table.pvalue<= 0.05].count()[0]
-    decrease_in_1 = table_gen[(table.mean1 < table.mean2) & table.pvalue<= 0.05].count()[0]
+    increase_in_1 = table_gen[(table_gen.mean1 > table_gen.mean2) & (table_gen.pvalue<= 0.05)].count()[0]
+    decrease_in_1 = table_gen[(table_gen.mean1 < table_gen.mean2) & (table_gen.pvalue<= 0.05)].count()[0]
     same = table_gen[table.pvalue > 0.05].count()[0]
     a = [summ, t_unic1, t_unic2, general ,increase_in_1, decrease_in_1, same]
     out.loc[idfs] = a
     return out, table_gen
 
-@benchmark
-def out(ilist, table, sum1, sum2, left, right, table_gen):
+def out(ilist, table, left, right, table_gen):
     a = "_".join(ilist)
     writer = pandas.ExcelWriter('script/{}.xlsx'.format(a))
     t_unic1 = table.ix[(table.mean1 > 0) & (table.mean2 == 0)]
     df2 = t_unic1[['taxonomy','mean1','mean2']]
     t_unic2 = table.ix[(table.mean2 > 0) & (table.mean1 == 0)]
     df3 = t_unic2[['taxonomy','mean1','mean2']]
-    table_gen_change = table_gen.ix[table.pvalue<= 0.05]
+    table_gen_change = table_gen.ix[table_gen.pvalue <= 0.05]
     table_gen_change['proportion'] = table_gen_change.apply(lambda x: x['mean1']/x['mean2'],axis=1)
     df1 = table_gen_change[['taxonomy','mean1','mean2','proportion']]
     df1.to_excel(writer,'general_with_proportion')
     df2.to_excel(writer,'unic_for_1')
     df3.to_excel(writer,'unic_for_2')
     writer.save()
-    print()
-    # table_change = table.ix[table.pvalue <= 0.05]
-    # table_change['pseudo_mean1'] = table_change[left].apply(lambda row: row/sum1)
-    # d_out = pandas.DataFrame(columns=('proportion' ,'prop_in_1',  'prop_in_2')) 
-    # ttable_change['proportion'] = table_change.apply(lambda x: x['mean1']/['mean2'],axis=1)
     return
 
-@benchmark
 def transform(table):
     out = table.to_dataframe()
     return out
 
-@benchmark
 def alltransform(table):
     ftable = biom.load_table(table)
     d = []
@@ -144,9 +144,8 @@ def alltransform(table):
     out['taxonomy'] = d
     return out
 
-@benchmark
 def pfilter(table, ilist):
-    ids = [i for i in table.columns.values if i.startswith(ilist[0]) or i.startswith(ilist[1])]
+    ids = [i for i in table.columns.values if i.rsplit('.', 1)[0] == ilist[0] or i.rsplit('.', 1)[0] == ilist[1]]
     ids.append('taxonomy')
     ftable = table[ids]
     return(ftable)
@@ -161,7 +160,15 @@ def main(inp, ID):
             lenidf = len(idf)
             if lenidf >= 2:
                 table = alltransform(inp)
+            fjl=0
+            ss = len(idf)
             for i in idf:
+
+                sys.stdout.write('\r')
+                fjl+=1
+                sys.stdout.write("{} {}/{}".format(i,fjl,ss))
+                sys.stdout.flush()
+
                 nonn_line = i.rstrip()
                 ilist = nonn_line.split("\t")
                 if lenidf <= 1:
@@ -169,12 +176,12 @@ def main(inp, ID):
                     datatable = transform(ftable)
                 else:
                     datatable = pfilter(table, ilist)
-                left, right, rttable, sum1, sum2 = ratiometr(datatable, ilist)
-                frttable = ratfilt(left, right, rttable)
+                left, right, rttable, summ = ratiometr(datatable, ilist)
+                frttable = ratfilt(left, right, rttable, tresh)
                 frttable = man_y(frttable,left, right)
                 global table_out
                 table_out, table_gen = log(d_out, frttable, ilist)
-                out(ilist, frttable, sum1, sum2, left, right, table_gen)
+                out(ilist, frttable,left, right, table_gen)
         with open("script/log.csv", "w") as l:
             table_out.to_csv( l , sep='\t')
         if os.path.isfile("temp2.txt"):   
