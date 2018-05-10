@@ -17,21 +17,16 @@ import time
 import collections
 import argparse
 
-'''
-Require openpyxl module for Excel table export.
-Convert data to proportion. Use Man-Whitney stats for pvalue calculation. Run-time version of code.
-Input - biom table in h5py format. Output - pairwise xlsx files with OTU proporion with taxonomic, csv log file with data of OTU quantity adjustment.
-. Require text file with tab delimiter between compared samples and unix line break between sample pairs
-'''
-
-parser = argparse.ArgumentParser(description="weee")
+parser = argparse.ArgumentParser(description="Require openpyxl module for Excel table export. Convert data to proportion. Use Man-Whitney stats for pvalue calculation. Run-time version of code. Input - biom table in h5py format. Output - pairwise xlsx files with OTU proporion with taxonomic, csv log file with data of OTU quantity adjustment.")
 parser.add_argument("-t", "--treshold", help="Treshold of proportion. Default - 0.005",action="store", dest="tresh",default='0.005')
 parser.add_argument("-i", "--imput", help="imput biom table",action="store", dest="inp",required=True)
-parser.add_argument("-m", "--map", help="ID list mapping file",action='store', default="all", dest="map")
+parser.add_argument("-m", "--map", help="ID list mapping file.Require text file with tab delimiter between compared samples and unix line break between sample pairs. Default - combine altogether",action='store', default="all", dest="map")
+parser.add_argument("-o", "--out", help="tsv - out in tsv tables. Default - export to xlsx Excel workbook.",action='store', default="xlsx", dest="export")
+
 args = parser.parse_args()
-parser.print_help()
 
 tresh = args.tresh
+export = args.export
 inp = args.inp
 if args.map == 'all':
     otu_table = biom.load_table(inp)
@@ -112,9 +107,8 @@ def log(out, table,ilist):
     out.loc[idfs] = a
     return out, table_gen
 
-def out(ilist, table, left, right, table_gen):
+def out(ilist, table, left, right, table_gen, export):
     a = "_".join(ilist)
-    writer = pandas.ExcelWriter('script/{}.xlsx'.format(a))
     t_unic1 = table.ix[(table.mean1 > 0) & (table.mean2 == 0)]
     df2 = t_unic1[['taxonomy','mean1','mean2']]
     t_unic2 = table.ix[(table.mean2 > 0) & (table.mean1 == 0)]
@@ -122,10 +116,20 @@ def out(ilist, table, left, right, table_gen):
     table_gen_change = table_gen.ix[table_gen.pvalue <= 0.05]
     table_gen_change['proportion'] = table_gen_change.apply(lambda x: x['mean1']/x['mean2'],axis=1)
     df1 = table_gen_change[['taxonomy','mean1','mean2','proportion']]
-    df1.to_excel(writer,'general_with_proportion')
-    df2.to_excel(writer,'unic_for_1')
-    df3.to_excel(writer,'unic_for_2')
-    writer.save()
+    if export == 'xlsx':
+        writer = pandas.ExcelWriter('script/{}.xlsx'.format(a))
+        df1.to_excel(writer,'general_with_proportion')
+        df2.to_excel(writer,'unic_for_1')
+        df3.to_excel(writer,'unic_for_2')
+        writer.save()
+    else:
+        with open("script/{}_general.csv".format(a), "w") as sd:
+            df1.to_dense().to_csv( sd , sep='\t', index = False)
+        with open("script/{}unic_for_1.csv".format(a), "w") as sf:
+            df2.to_dense().to_csv( sf, sep='\t', index = False)
+        with open("script/{}_unic_for_2.csv".format(a), "w") as sg:
+            df3.to_dense().to_csv( sg, sep='\t',  index = False)
+
     return
 
 def transform(table):
@@ -181,7 +185,7 @@ def main(inp, ID):
                 frttable = man_y(frttable,left, right)
                 global table_out
                 table_out, table_gen = log(d_out, frttable, ilist)
-                out(ilist, frttable,left, right, table_gen)
+                out(ilist, frttable,left, right, table_gen, export)
         with open("script/log.csv", "w") as l:
             table_out.to_csv( l , sep='\t')
         if os.path.isfile("temp2.txt"):   
