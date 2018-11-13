@@ -1,0 +1,591 @@
+time qiime dada2 denoise-single \
+  --i-demultiplexed-seqs demux.qza \
+  --p-trim-left 0 \
+  --p-trunc-len 120 \
+  --o-representative-sequences rep-seqs-dada2.qza \
+  --o-table table.qza \
+  --o-denoising-stats stats-dada2.qza
+
+
+
+qiime demux summarize \
+  --i-data paired-end-demux.qza \
+  --o-visualization demux.qzv
+
+time qiime alignment mafft \
+  --i-sequences rep-seqs.qza \
+  --o-alignment aligned-rep-seqs.qza
+
+time qiime dada2 denoise-single \
+  --i-demultiplexed-seqs demux.qza \
+  --p-trim-left 0 \
+  --p-trunc-len 160 \
+  --o-representative-sequences rep-seqs-dada2.qza \
+  --o-table table-dada2.qza \
+  --o-denoising-stats stats-dada2.qza
+
+qiime feature-table summarize \
+  --i-table table.qza \
+  --o-visualization table.qzv \
+qiime feature-table tabulate-seqs \
+  --i-data rep-seqs.qza \
+  --o-visualization rep-seqs.qzv
+
+qiime feature-table summarize \
+  --i-table ftable.qza \
+  --o-visualization ftable.qzv \
+
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree.qza \
+  --i-table ftable.qza \
+  --p-sampling-depth 22510 \
+  --output-dir core-metrics-results  --m-metadata-file fire_map.tsv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity core-metrics-results/faith_pd_vector.qza \
+  --m-metadata-file fire_map.tsv \
+  --o-visualization core-metrics-results/faith-pd-group-significance.qzv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity core-metrics-results/evenness_vector.qza \
+  --m-metadata-file fire_map.tsv \
+  --o-visualization core-metrics-results/evenness-group-significance.qzv
+
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path manifest.csv\
+  --output-path paired-end-demux.qza\
+  --source-format PairedEndFastqManifestPhred33 
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier silva-132-99-515-806-nb-classifier.qza \
+  --i-reads rep-seqs.qza \
+  --o-classification taxonomy.qza
+
+qiime metadata tabulate \
+  --m-input-file taxonomy.qza \
+  --o-visualization taxonomy.qzv
+
+qiime tools export taxonomy.qza \
+  --output-dir taxonomy-with-spaces
+qiime metadata tabulate \
+  --m-input-file taxonomy-with-spaces/taxonomy.tsv  \
+  --o-visualization taxonomy-as-metadata.qzv
+qiime tools export taxonomy-as-metadata.qzv \
+  --output-dir taxonomy-as-metadata
+qiime tools import \
+  --type 'FeatureData[Taxonomy]' \
+  --input-path taxonomy-as-metadata/metadata.tsv \
+  --output-path taxonomy-without-spaces.qza
+
+
+qiime taxa barplot \
+  --i-table table.qza \
+  --i-taxonomy taxonomy-without-spaces.qza \
+  --m-metadata-file fire_map.tsv \
+  --o-visualization taxa-bar-plots.qzv
+
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree.qza \
+  --i-table table.qza \
+  --p-sampling-depth 1109 \
+  --m-metadata-file fure_map.tsv \
+  --output-dir core-metrics-results
+
+qiime gneiss correlation-clustering \
+  --i-table composition.qza \
+  --o-clustering hierarchy.qza | qiime gneiss ilr-transform \
+  --i-table composition.qza \
+  --i-tree hierarchy.qza \
+  --o-balances balances.qza
+
+qiime gneiss ols-regression \
+  --p-formula "Subject+Sex+Age+BMI+sCD14ugml+LBPugml+LPSpgml" \
+  --i-table balances.qza \
+  --i-tree hierarchy.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization regression_summary.qzv
+
+qiime gneiss ols-regression \
+  --p-formula "Site+Horizont+Description" \
+  --i-table balances.qza \
+  --i-tree hierarchy.qza \
+  --m-metadata-file fire_map.tsv \
+  --o-visualization regression_summary.qzv
+
+qiime gneiss balance-taxonomy \
+  --i-table composition.qza \
+  --i-tree hierarchy.qza \
+  --i-taxonomy taxanomy.qza \
+  --p-taxa-level 1 \
+  --p-balance-name 'y0' \
+  --m-metadata-file fire_map.tsv \
+  --m-metadata-column Subject \
+  --o-visualization y0_taxa_summary.qzv
+
+biom convert -i feature-table.biom -o ftable.tsv  --to-tsv ; sed -i  's/0\.0\t/\-0\.77555756156e\-18\t/g' -i ftable.tsv; sed -i  's/0\.0$/\-0\.77555756156e\-18\t/g' -i ftable.tsv ; biom convert -i ftable.tsv -o feature-table.biom --to-hdf5
+
+time qiime feature-table filter-samples --i-table table.qza --m-metadata-file fire_map.tsv --p-where "Horizont IN ('AY')" --o-filtered-table ftable.qza ;qiime feature-table filter-features --i-table table.qza --p-min-frequency 10  --o-filtered-table fftable.qza ; qiime gneiss add-pseudocount --i-table fftable.qza --p-pseudocount 1 --o-composition-table composition.qza ; qiime gneiss correlation-clustering --i-table composition.qza --o-clustering hierarchy.qza ; qiime gneiss ilr-transform --i-table composition.qza --i-tree hierarchy.qza --o-balances balances.qza ; qiime gneiss ols-regression --p-formula "Site+Description" --i-table balances.qza --i-tree hierarchy.qza --m-metadata-file fire_map.tsv --o-visualization regression_summary.qzv
+
+All-10
+      Description[T.C.Lowfire]        Sum      Mean  
+716               8.112785e-02   0.494128  0.070590  
+6                 1.302126e-03   0.711289  0.101613  
+109               4.304009e-02   0.903761  0.129109  
+10                3.337808e-01   1.157807  0.165401  
+4641              1.787200e-01   1.200212  0.171459  
+2                 1.598201e-01   1.341897  0.191700  
+21                7.195294e-01   1.392886  0.198984  
+655               4.076314e-01   1.430259  0.204323  
+349               4.983176e-01   1.430775  0.204396  
+341               4.854626e-02   1.483248  0.211893  
+5                 2.715396e-01   1.494129  0.213447  
+1                 2.707312e-01   1.537925  0.219704  
+54                3.547040e-01   1.611687  0.230241  
+1360              5.600297e-01   1.615519  0.230788  
+159               4.109961e-02   1.630121  0.232874  
+9                 5.698076e-07   1.635079  0.233583  
+27                3.473099e-01   1.671719  0.238817  
+37                1.270922e-01   1.674538  0.239220  
+386               6.538472e-04   1.758688  0.251241  
+30                8.168728e-01   1.765617  0.252231  
+28                4.070003e-01   1.785242  0.255035  
+0                 9.948500e-01   1.802340  0.257477  
+89                4.636259e-01   1.852318  0.264617  
+668               9.017654e-02   1.854760  0.264966  
+440               7.131779e-01   1.864537  0.266362  
+189               3.766741e-02   1.975008  0.282144  
+239               7.557866e-02   1.993116  0.284731  
+388               1.265343e-01   2.018939  0.288420  
+511               7.917791e-01   2.044812  0.292116 
+
+All-10(log10 + absolute) 
+
+846                3.138477e+00              4.441306e-01  32.302539  
+11                 9.296660e-02              2.866340e+00  32.708823  
+225                1.896512e-01              5.608349e+00  33.473537  
+1530               3.434867e-01              3.434867e-01  33.490630  
+14                 1.745548e-01              1.797759e+00  34.762122  
+61                 4.226231e-01              9.339060e+00  35.130984  
+1                  2.570744e+00              5.674617e-01  35.465531  
+716                4.044178e+00              1.090830e+00  37.444394  
+1250               4.706216e+00              5.228210e-01  38.035891  
+5                  3.533062e+00              5.661669e-01  39.093256  
+1277               2.266170e-15              3.278713e-15  39.197645  
+36                 1.954462e-01              3.836185e-02  40.334316  
+1800               2.459632e-01              2.459632e-01  43.666958  
+1094               3.325052e-01              4.543995e-01  43.797514  
+28                 1.277143e+00              3.904053e-01  44.738686  
+1801               1.456074e-02              1.456074e-02  46.336219  
+89                 5.095537e+00              3.338323e-01  51.824736  
+6                  6.068244e+00              2.885347e+00  53.093511  
+1529               3.134064e-15              5.400234e-15  54.366602  
+27                 1.049082e-01              4.592828e-01  54.412118  
+10                 2.942989e-01              4.765386e-01  55.149619  
+9                  4.389835e-01              6.244272e+00  58.064859  
+620                8.080079e-03              5.859529e-02  60.944991  
+2                  6.403154e+00              7.963686e-01  61.142002  
+90                 6.715155e-01              1.948859e-03  66.151487  
+341                1.865045e-01              1.313844e+00  74.149910  
+21                 2.360347e-01              1.429515e-01  75.475202  
+30                 1.354622e+00              8.784554e-02  81.764610  
+0                  7.891208e+00              2.242414e-03  93.205459  
+159                8.882190e-01              1.386162e+00  94.241177  
+
+control_low
+
+349   4.260665e+00           4.531163      ...                   3.024938e-01  3.208697e+01
+11    3.940666e+00           3.248896      ...                   2.866340e+00  3.228583e+01
+225   5.383729e-02           0.287501      ...                   5.608349e+00  3.299219e+01
+1530  6.183123e+00           4.767471      ...                   3.434867e-01  3.304540e+01
+14    3.031201e-01           0.154256      ...                   1.797759e+00  3.420756e+01
+61    2.654914e+00           0.771102      ...                   9.339060e+00  3.464765e+01
+1     6.767446e-01           4.358950      ...                   5.674617e-01  3.527860e+01
+716   5.364747e+00           0.811135      ...                   1.090830e+00  3.713823e+01
+1250  6.806495e-01           8.263119      ...                   5.228210e-01  3.768033e+01
+1277  6.697278e+00           4.829344      ...                   3.278713e-15  3.859527e+01
+5     4.942875e+00           3.776477      ...                   5.661669e-01  3.891887e+01
+36    7.812095e+00           4.881134      ...                   3.836185e-02  3.992213e+01
+1800  6.935044e+00           4.757014      ...                   2.459632e-01  4.319656e+01
+1094  7.279234e+00           5.611615      ...                   4.543995e-01  4.338321e+01
+28    7.886744e+00           4.593563      ...                   3.904053e-01  4.448699e+01
+1801  7.725464e+00           5.662440      ...                   1.456074e-02  4.574277e+01
+89    1.850318e+00          10.764263      ...                   3.338323e-01  5.155702e+01
+6     9.691914e+00           0.277235      ...                   2.885347e+00  5.294556e+01
+1529  8.895499e+00           6.681950      ...                   5.400234e-15  5.376453e+01
+27    9.795029e+00           6.010554      ...                   4.592828e-01  5.418895e+01
+10    6.712120e+00           7.039968      ...                   4.765386e-01  5.508598e+01
+9     1.601662e-01           2.196606      ...                   6.244272e+00  5.785132e+01
+620   9.911573e+00           7.457858      ...                   5.859529e-02  6.046960e+01
+2     9.740504e+00           8.527299      ...                   7.963686e-01  6.101428e+01
+90    1.009461e+01           8.631167      ...                   1.948859e-03  6.579439e+01
+341   1.222192e+01           9.473425      ...                   1.313844e+00  7.397870e+01
+21    1.089169e+01           9.542191      ...                   1.429515e-01  7.533129e+01
+30    1.474631e+01          11.407716      ...                   8.784554e-02  8.151771e+01
+0     1.781528e+01           0.302909      ...                   2.242414e-03  9.294962e+01
+159   1.532226e+01          12.197650      ...                   1.386162e+00  9.402896e+01
+
+l-c_AY
+155   4.229029e+00          3.389226                   3.389226  11.007481
+1162  6.698561e+00          2.154805                   2.154805  11.008171
+525   4.238280e+00          3.398044                   3.398044  11.034368
+88    4.209629e+00          3.497953                   3.497953  11.205535
+2177  6.846188e+00          2.191589                   2.191589  11.229365
+391   4.171826e+00          3.538879                   3.538879  11.249585
+1404  7.146939e+00          2.068411                   2.068411  11.283761
+2259  7.146939e+00          2.068411                   2.068411  11.283761
+133   4.678230e+00          3.820397                   3.820397  12.319024
+2879  7.430330e+00          2.445686                   2.445686  12.321702
+127   5.372409e+00          4.496139                   4.496139  14.364687
+378   5.514588e+00          4.635579                   4.635579  14.785746
+1     5.444159e+00          4.687484                   4.687484  14.819128
+0     5.057125e+00          4.882578                   4.882578  14.822280
+75    5.977953e+00          5.091800                   5.091800  16.161553
+5     5.087019e+00          6.004956                   6.004956  17.096930
+706   6.886844e+00          5.992222                   5.992222  18.871288
+4     7.385081e+00          6.465387                   6.465387  20.315855
+249   7.669847e+00          6.771409                   6.771409  21.212665
+11    8.158356e+00          6.938427                   6.938427  22.035210
+375   9.060144e+00          8.158657                   8.158657  25.377458
+4480  9.503808e+01          1.148421                   1.148421  97.334923
+3935  9.503808e+01          1.148421                   1.148421  97.334923
+1791  9.503808e+01          1.148421                   1.148421  97.334923
+4011  9.503808e+01          1.148421                   1.148421  97.334923
+4975  9.503808e+01          1.148421                   1.148421  97.334923
+4162  9.503808e+01          1.148421                   1.148421  97.334923
+1740  9.503808e+01          1.148421                   1.148421  97.334923
+4646  9.503808e+01          1.148421                   1.148421  97.334923
+4941  9.503808e+01          1.148421                   1.148421  97.334923
+
+
+
+import pandas
+import numpy
+dt = pandas.DataFrame()
+dt = pandas.read_csv("low_control.csv", sep=",")
+pda = dt.loc[:, "Intercept":]
+pda_log = pda.applymap(numpy.log10)
+pda_abs = pda_log.apply(numpy.absolute)
+pda_abs["Mean"] = pda_abs[pda_abs.columns].sum(axis=1)
+pda_abs.sort_values("Mean")
+
+time qiime gneiss balance-taxonomy \
+  --i-table composition.qza \
+  --i-tree hierarchy.qza \
+  --i-taxonomy taxonomy.qza \
+  --p-taxa-level 3 \
+  --p-balance-name 'y0' \
+  --m-metadata-file fire_map.tsv \
+  --m-metadata-column Description \
+  --o-visualization y0_taxa_summary.qzv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity shannon_no_rar_otus_vector.qza \
+  --m-metadata-file fire_map.tsv \
+  --o-visualization shannon_no_rar-group-significance.qzv
+
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric shannon \
+  --o-alpha-diversity shannon_no_rar_otus_vector.qza
+
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path 2017_illumina_4 \
+  --output-path demux.qza \
+  --source-format PairedEndFastqManifestPhred33
+
+
+  --o-alpha-diversity shannon_no_rar_otus_vector.qza
+dl = list(c(180,180,2,2), c(180,180,2,3), c(180,180,3,3), c(180,180,3,4))
+for(i in dl) {
+a <- i[1]
+b <- i[2]
+c <- i[3]
+d <- i[4]
+string="{a},{b}_{c},{d}.txt"
+name <- glue(string)
+path <- "/home/gladkov/storage/raw_fires/new_dada/fire_test/2017_illumina_4"
+fnFs <- sort(list.files(path, pattern="_R1_001.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(a,b), trimLeft=15, maxN=0, maxEE=c(c,d), rm.phix=TRUE, compress=TRUE, multithread=4)
+errF <- learnErrors(filtFs, multithread=4)
+errR <- learnErrors(filtRs, multithread=4)
+derepFs <- derepFastq(filtFs, verbose=4)
+derepRs <- derepFastq(filtRs, verbose=4)
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names
+names(derepRs) <- sample.names
+dadaFs <- dada(derepFs, err=errF, multithread=4)
+dadaRs <- dada(derepRs, err=errR, multithread=4)
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs, verbose=TRUE)
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+table(nchar(getSequences(seqtab)))
+getN <- function(x) sum(getUniques(x))
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=4, verbose=TRUE)
+dim(seqtab.nochim)
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+write.csv(track, file=name)}
+
+./usearch11.0.667_i86linux32 -uchime2_ref uniqueSeqs.fasta -db 97_otus.fasta -uchimeout out.txt -strand plus -mode high_confidence -threads 4
+Chimeras 28644/52602 (54.5%), in db 394 (0.7%), not matched 23564 (44.8%)
+
+path <- "/home/gladkov/storage/raw_fires/new_dada/fire_test/only_1"
+fnFs <- sort(list.files(path, pattern="_R1_001.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(180,180), trimLeft=15, maxN=0, maxEE=c(2,2), rm.phix=TRUE, compress=TRUE, multithread=4)
+errF <- learnErrors(filtFs, multithread=4)
+errR <- learnErrors(filtRs, multithread=4)
+derepFs <- derepFastq(filtFs, verbose=4)
+derepRs <- derepFastq(filtRs, verbose=4)
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names
+names(derepRs) <- sample.names
+dadaFs <- dada(derepFs, err=errF, multithread=4)
+dadaRs <- dada(derepRs, err=errR, multithread=4)
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs, verbose=TRUE)
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+table(nchar(getSequences(seqtab)))
+getN <- function(x) sum(getUniques(x))
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=4, verbose=TRUE)
+
+dna <- DNAStringSet(getSequences(seqtab.nochim)) # Create a DNAStringSet from the ASVs
+load("/home/gladkov/storage/raw_fires/new_dada/SILVA_SSU_r132_March2018.RData") # CHANGE TO THE PATH OF YOUR TRAINING SET
+ids <- IdTaxa(dna, trainingSet, strand="top", processors=4, verbose=FALSE) # use all processors
+ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
+# Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+taxid <- t(sapply(ids, function(x) {
+     m <- match(ranks, x$rank)
+     taxa <- x$taxon[m]
+     taxa[startsWith(taxa, "unclassified_")] <- NA
+     taxa
+ }))
+> colnames(taxid) <- ranks; rownames(taxid) <- getSequences(seqtab.nochim)
+
+met <- read.csv("fire_map.tsv", header=TRUE, sep="\t")
+dfmet <- data.frame(row.names="X.SampleID", met)
+
+ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
+               sample_data(dfmet), 
+               tax_table(taxid))
+
+seqnum <- paste0("Seq", seq(ncol(seqtab.nochim)))
+uniqueSeqs <- as.list(colnames(seqtab.nochim))
+write.fasta(uniqueSeqs, seqnum, "/home/gladkov/storage/raw_fires/new_dada/fire_test/zver/trimmed_fna/uniqueSeqs.fasta")
+
+00:20 777Mb   100.0% Chimeras 244/616 (39.6%), in db 141 (22.9%), not matched 231 (37.5%) for unic gg
+04:32 799Mb   100.0% Chimeras 14929/52602 (28.4%), in db 394 (0.7%), not matched 37279 (70.9%)
+00:20 777Mb   100.0% Chimeras 78/616 (12.7%), in db 141 (22.9%), not matched 397 (64.4%)
+
+pslog <- transform_sample_counts(ps, function(x) log(1 + x))
+out.pcoa.log <- ordinate(pslog,  method = "MDS", distance = "bray")
+evals <- out.pcoa.log$values[,1]
+plot_ordination(pslog, out.pcoa.log, color = "Repeats",
+  labs(col = "Repeats")+
+  coord_fixed(sqrt(evals[2] / evals[1]))
+
+http://web.stanford.edu/class/bios221/MicrobiomeWorkflowII.html#shiny-phyloseq
+ 
+raxmlHPC-PTHREADS -m GTRGAMMAI -p 12345 -# 20 -s align.fasta -n results_20ML -T 4; raxmlHPC-PTHREADS -m GTRGAMMAI -p 12345 -b 12345 -# 100 -s align.fasta -n results_100 -T 4; raxmlHPC-PTHREADS -m GTRGAMMAI -p 12345 -f b -t RAxML_bestTree.results_20ML -z RAxML_bootstrap.results_100 -n result -T 4
+
+briefToSeq <- colnames(seqtab.nochim)
+names(briefToSeq) <- paste0("Seq", seq(ncol(seqtab.nochim))) 
+st.brief <- seqtab.nochim
+colnames(st.brief) <- names(briefToSeq) 
+# Get real sequence from the brief name later 
+seq_i <- briefToSeq[brief_name_i]
+
+seqs <- getSequences(seqtab.nochim)
+names(seqs) <- getSequences(st.brief)
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA,verbose=FALSE, processors = 4)
+
+ writeXStringSet(alignment,   file="align.fasta")
+
+raxmlHPC-PTHREADS -s align.fasta -T 4 -f a -p 5547 -x 7766 -N 100 -n tree_100_GTRGAMMAIX -m GTRGAMMAI
+
+real    11362m18.848s
+user    45445m52.160s
+sys     2m12.396s
+
+
+source("https://bioconductor.org/biocLite.R")
+biocLite("ggtree")
+biocLite("Biostrings")
+install.packages('devtools')
+devtools::install_github('reptalex/phylofactor')
+
+https://microsud.github.io/Tools-Microbiome-Analysis/
+extract_barcodes.py
+
+
+ipsec pki --pub --in vpn-server-key.pem \
+--type rsa | ipsec pki --issue --lifetime 1825 \
+--cacert server-root-ca.pem \
+--cakey server-root-key.pem \
+--dn "C=an, O=VPN, CN=185.58.224.83" \
+--san 185.58.224.83 \
+--flag serverAuth --flag ikeIntermediate \
+--outform pem > vpn-server-cert.pem
+
+config setup
+charondebug="ike 1, knl 1, cfg 0"
+uniqueids=no
+conn ikev2-vpn
+auto=add
+compress=no
+type=tunnel
+keyexchange=ikev2
+fragmentation=yes
+forceencaps=yes
+ike=aes256-sha1-modp1024,3des-sha1-modp1024!
+esp=aes256-sha1,3des-sha1!
+dpdaction=clear
+dpddelay=300s
+rekey=no
+left=%any
+leftid=185.58.224.83
+leftcert=/etc/ipsec.d/certs/vpn-server-cert.pem
+leftsendcert=always
+leftsubnet=0.0.0.0/0
+right=%any
+rightid=%any
+rightauth=eap-mschapv2
+rightdns=8.8.8.8,8.8.4.4
+rightsourceip=10.10.10.0/24
+rightsendcert=never
+eap_identity=%identity
+
+185.58.224.83 : RSA "/etc/ipsec.d/private/vpn-server-key.pem"
+
+ipsec pki --self --ca --lifetime 3650 \
+--in server-root-key.pem \
+--type rsa --dn "C=US, O=VPN Server, CN=185.58.224.83" \
+--outform pem > server-root-ca.pem
+
+    ipsec pki --pub --in vpn-server-key.pem \
+    --type rsa | ipsec pki --issue --lifetime 1825 \
+    --cacert server-root-ca.pem \
+    --cakey server-root-key.pem \
+    --dn "C=US, O=VPN Server, CN=185.58.224.83" \
+    --san server_name_or_ip \
+    --flag serverAuth --flag ikeIntermediate \
+    --outform pem > vpn-server-cert.pem
+
+python merge_bcs_reads.py Undetermined_S0_L001_I2_001.fastq Undetermined_S0_L001_R1_001.fastq Full_Read1_wBarcodes.fastq
+
+$ python merge_bcs_reads.py Undetermined_S0_L001_I1_001.fastq Undetermined_S0_L001_R2_001.fastq Full_Read2_wBarcodes.fastq
+
+$ extract_barcodes.py --input_type barcode_paired_end -f Full_Read1_wBarcodes.fastq -r Full_Read2_wBarcodes.fastq -m Pilot_QIIME_MapFile_2.txt --rev_comp_bc2 --switch_bc_order --bc1_len 8 --bc2_len 8 -o parsed_barcodes_fullreads/
+
+$ join_paired_ends.py -f reads1.fastq -r reads2.fastq -b barcodes.fastq -o /Users/Sara_Jeanne/Desktop/QIIME/fastq-join_joined_FullReads
+
+$ split_libraries_fastq.py -i fastqjoin.join.fastq -b fastqjoin.join_barcodes.fastq -m Pilot_QIIME_MapFile_2.txt -o Split_Lib_FullReads_attachedBC_q20/ --store_qual_scores --barcode_type 16 -q 19 
+
+qiime tools import \
+  --input-path 2.biom \
+  --type 'FeatureTable[Frequency]' \
+  --input-format BIOMV210Format \
+  --output-path 2.qza ; qiime tools import \
+  --input-path rep2 \h
+  --output-path rep2.qza \
+  --type 'FeatureData[Sequence]' ; qiime feature-classifier classify-sklearn \
+  --i-classifier silva-132-99-515-806-nb-classifier.qza \
+  --i-reads rep2.qza \
+  --o-classification taxonomy1.qza ; qiime taxa barplot \
+  --i-table 2.qza \
+  --i-taxonomy taxonomy1.qza \
+  --m-metadata-file mapp1_2.csv \
+  --o-visualization taxa-bar-plots2.qzv
+ 
+qiime feature-classifier classify-sklearn \
+  --i-classifier silva-132-99-515-806-nb-classifier.qza \
+  --i-reads rep2.qza \
+  --o-classification taxonomy2.qza --p-n-jobs 4 ; qiime taxa barplot \
+  --i-table 2.qza \
+  --i-taxonomy taxonomy2.qza \
+  --m-metadata-file mapp_1.csv \
+ --o-visualization taxa-bar-plots2.qzv
+
+qiime taxa barplot \
+  --i-table 1.qza \
+  --i-taxonomy taxonomy1.qza \
+  --m-metadata-file mapp_1.csv \
+  --o-visualization taxa-bar-plots1.qzv
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier silva-132-99-515-806-nb-classifier.qza \
+  --i-reads rep2.qza \
+  --o-classification taxonomy2.qza --p-n-jobs 4
+
+
+psnew <- phyloseq(otu_table(st.brief, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(newtaxaid)
+		phy_tree(MLtree))
+st.brief
+
+https://stackoverflow.com/questions/15693340/replace-matrix-values-in-r-with-rownames-another-matrix
+AWI-187972
+YhJfO881%Y
+GGTAATACGAAGGGTGCAAGCGTTACTCGGAATTACTGGGCGTAAAGCGTGCGTAGGTGGTCGTTTAAGTCCGTTGTGAAAGCCCTGGGCTCAACCTGGGAACTGCAGTGGATACTGGACGACTAGAGTGTGGTAGAGGGTAGCGGAATTCCTGGTGTAGCAGTGAAATGCGTAGAGATCAGGAGGAACACCCGTGGCGAAGGCGGCGCCCTGGTCCGTTACTGACGCTGAGACGCGAAAGCGCGGGGAGCGAACGGGATTAG
+TAACACGGGGGGAGCAAGCGTTATTCGGATTTACTGGGCATAAAGCGCGCGTAGGCGGCTTGGCAAGTCGGAGGTGAAAGCCTGCAGCTCAACTGCGGTGTGCCTCCGAAACTGCCGGGCTTGAGTGCGGGAGGGGTGATTGGAACTCCAGGTGTAGCGGTGAAATGCGTAGATATCTGGAGGAACACCAGAGGCGAAGGCGAATCACTGGACCGCAACTGACGCTGAGGCGCGAAAGCGTGGGGAGCAAACAGGATTA
+C
+Creating 100% stacked bar plots with less abundant taxa in a sub-category 
+
+OTU1 = as(otu_table(ps2), "matrix") 
+OTUdf = as.data.frame(t(OTU1))
+write.csv2(OTUdf, file ="test_table.tsv",row.names=FALSE, sep="\t")
+
+div_net_ <- divnet(tax_glom(ps, taxrank="phylum"),ncores = 4)
+
+simplifyBeta(div_net_ps, lee_phylum, "bray-curtis", "char") %>%
+  ggplot(aes(x = interaction(Covar1, Covar2), 
+             y = beta_est, 55556
+             col = interaction(Covar1, Covar2))) +
+  geom_point() +
+  geom_linerange(aes(ymin = lower, ymax = upper)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") + ylab("Estimates of Bray-Curtis distance")
+
+#ampvis2 visualisations
+
+Import from ps to ampvis2:
+
+library(metagMisc)
+library(data.table)
+phyloseq_to_amp <- function(ps){
+my_otu_table <- phyloseq_to_df(ps, addtax = T, addtot = F, addmaxrank = F, sorting = "abundance")
+my_otu_table <- column_to_rownames(my_otu_table, var="OTU")
+last_column <- ncol(my_otu_table)
+my_otu_table <- my_otu_table[,c(8:last_column,1:7)]
+ setnames(my_otu_table, old=c("domain","phylum","class","order","family","genus","species"), new=c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
+my_metadata <- as_tibble(sample_data(ps))
+my_metadata <- rownames_to_column(my_metadata,var = "SampleID")
+my_tree <- phy_tree(ps)
+amp.ps <- amp_load(otutable = my_otu_table, metadata = my_metadata, tree = my_tree)
+return(amp.ps)
+}
+
+amp_venn(amp.ps, group_by = "Site", cut_a = 0.0001, cut_f = 0.0001)
+
+amp_boxplot(amp.ps, group_by = "Site", tax_aggregate = "Phylum", sort_by = "median", tax_empty = "remove", tax_show = 10)
+
+amp_ordinate(amp.ps, type = "PCOA", transform = "none",  distmeasure = "wunifrac", constrain = c("Site","Horizont"), sample_color_by = "Repeats", sample_colorframe = TRUE, filter_species = 0, sample_colorframe_label = "Repeats")
+
+ps.C <- subset_samples(ps, Horizont == "C")
+
+fila.ps <- amp_boxplot(amp.ps, group_by = "Site", tax_aggregate = "Phylum", sort_by = "median", tax_empty = "remove", tax_show = 10, detailed_output = TRUE)
+View(fila.ps[["plot"]][["plot_env"]][["TotalCounts"]])
+setwd("~/storage/fire/pic")
+write.table(fila.ps[["plot"]][["plot_env"]][["TotalCounts"]], file="filaCount.tsv, sep='\t')
+Chushi 
