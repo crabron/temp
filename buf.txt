@@ -589,3 +589,5 @@ View(fila.ps[["plot"]][["plot_env"]][["TotalCounts"]])
 setwd("~/storage/fire/pic")
 write.table(fila.ps[["plot"]][["plot_env"]][["TotalCounts"]], file="filaCount.tsv, sep='\t')
 Chushi 
+
+https://rpubs.com/michberr/randomforestmicrobe
