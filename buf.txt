@@ -409,9 +409,9 @@ seqs <- getSequences(seqtab.nochim)
 names(seqs) <- getSequences(st.brief)
 alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA,verbose=FALSE, processors = 4)
 
- writeXStringSet(alignment,   file="align.fasta")
+writeXStringSet(alignment, file="align.fasta")
 
-raxmlHPC-PTHREADS -s align.fasta -T 4 -f a -p 5547 -x 7766 -N 100 -n tree_100_GTRGAMMAIX -m GTRGAMMAI
+raxmlHPC-PTHREADS-AVX2 -s align.fasta -T 4 -f a -p 5547 -x 7766 -N 100 -n tree_100_GTRGAMMAIX -m GTRGAMMAI
 
 real    11362m18.848s
 user    45445m52.160s
@@ -591,3 +591,52 @@ write.table(fila.ps[["plot"]][["plot_env"]][["TotalCounts"]], file="filaCount.ts
 Chushi 
 
 https://rpubs.com/michberr/randomforestmicrobe
+
+ps.AC.Control_Lowfire <- prune_samples(sample_data(ps.AC)$Site %in% c("Control","Low_fire"),ps.AC)
+
+pispino_createreadpairslist -i data_2 -o readpairslist.txt && pispino_seqprep -i data_2 -o out_seqprep -l readpairslist.txt && pipits_funits -i out_seqprep/prepped.fasta -o out_funits -x ITS1 && pipits_process -i out_funits/ITS.fasta -o out_process 
+
+/home/alexey/storage/analysis/Plates/otus
+
+qiime diversity alpha-phylogenetic \
+  --i-table table.qza \
+  --i-phylogeny rooted-tree.qza \
+  --p-metric faith_pd \
+  --o-alpha-diversity faith_pd_vector.qza
+&&
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric observed_otus \
+  --o-alpha-diversity observed_otus_vector.qza
+&&
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric ace \
+  --o-alpha-diversity ace_vector_vector.qza
+&&
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric singles \
+  --o-alpha-diversity singles_vector.qza
+&&
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric shannon \
+  --o-alpha-diversity shannon_vector.qza
+&&
+qiime diversity alpha \
+  --i-table table.qza \
+  --p-metric goods_coverage \
+  --o-alpha-diversity goods_coverage_vector.qza
+&&
+
+
+iime tools import \
+  --input-path sf_otu_table.biom .biom \
+  --type 'FeatureTable[Frequency]' \
+  --input-format BIOMV100Format \
+  --output-path sf_otu_table.qza
+
+qiime feature-table group --i-table feature-table.qza --m-metadata-file fire-map-ex.tsv --m-metadata-column Repeats --o-grouped-table gr-feature-table.qza --p-mode median-ceiling --p-axis sample
+
+
