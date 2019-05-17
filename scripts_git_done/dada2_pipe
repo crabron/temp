@@ -55,10 +55,6 @@ colnames(st.brief) <- names(briefToSeq)
 
 write.table(briefToSeq, file = name_Brief, sep = "\t")
 
-dna <- DNAStringSet(briefToSeq)
-alignment <- AlignSeqs(DNAStringSet(dna), anchor=NA,verbose=FALSE, processors = mlt)
-writeXStringSet(alignment, file="align.fasta")
-
 taxa.dada2 <- assignTaxonomy(briefToSeq,path_trein_set , multithread=mult)
 taxa.dada2.species <- assignSpecies(briefToSeq, path_trein_set_species) # maybe use not seqs but brief 
 rownames(taxa.dada2.species) <- rownames(briefToSeq)
