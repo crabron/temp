@@ -62,3 +62,14 @@ vare.cca <- cca(otus.ps.vegan.descrnames ~ pH + SoilAl, data=metadata)
 plot(vare.cca,choices=c(1,2),display=c("wa","bp"),type="points",xlim=c(-4,1.5),scaling=2)
 points(vare.cca,disp="sites",pch=21,col="red",bg="red",cex=1.3)
 text(vare.cca,"sites",pos=3,axis.bp=TRUE)
+
+mantel.local <- function(ps, ){
+    gr.map.d <- as.data.frame(gr.map.num)
+    gr.map.num <- mapply(gr.map, FUN=as.numeric)
+    ps.pruned <- prune_samples(sample_data(ps)$Plant %in% c(plant), ps)
+    dist <- distance(ps.pruned, "bray")
+    map <- map.d[which(map.d$Plant=="s7307"),]
+    env.dist <- vegdist(scale(map$pH) , "euclid")
+    mant <- mantel(dist, env.dist, method="pearson", permutations = 9999)
+    return(mant)
+}

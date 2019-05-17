@@ -38,7 +38,7 @@ For Lise:
 
 diagdds_Lise = function(ps, name){
     diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
-    diagdds <- DESeq(diagdds, test="Wald", fitType="parametric")
+    
     samp <-sample_data(ps)
     dds.counts <- diagdds@assays@.xData$data$counts
     dds.counts.df <- as.data.frame(dds.counts)
@@ -52,18 +52,103 @@ diagdds_Lise = function(ps, name){
     return(nice)
 }  
 
-d1 <- diagdds_Lise(ps.1, "site1_diagdds.csv")                  
-d2 <- diagdds_Lise(ps.2, "site2_diagdds.csv")                   
-d3 <- diagdds_Lise(ps.3, "site3_diagdds.csv")                  
-d4 <-diagdds_Lise(ps.4, "site4_diagdds.csv")                  
-d5 <-diagdds_Lise(ps.15 "site5_diagdds.csv")                   
+diagg.var <- diagdds_Lise(ps.var, "site1_diagdds.csv")                  
+diagg.art <- diagdds_Lise(ps.art, "site2_diagdds.csv")                   
+diagg.pse <- diagdds_Lise(ps.pse, "site3_diagdds.csv")                  
+diagg.sph <-diagdds_Lise(ps.sph, "site4_diagdds.csv")                  
+diagg.bac <-diagdds_Lise(ps.bac "site5_diagdds.csv")                   
 
+> View(diagg.var)
+> View(diagg.art)
+> View(diagg.pse)
+> View(diagg.sph)
+> View(diagg.bac)                  
                   
 nice <- cbind(as.data.frame(sigtab), as.data.frame(tax_table(ps.1)[rownames(sigtab),]), as.data.frame(aggdata[rownames(sigtab),])) 
                   
                   EF517956.1.1666
-	
+ggplot(data=depth.mut, aes(log(Conc_by_RealTime), ratio)) + geom_point() + ggrepel::geom_text_repel(data=subset(depth.mut, log(depth.mut$Conc_by_RealTime) < 16 ), aes(label=ID), size = 3)
+                  
+cooks.clean <- t(log10(assays(diagdds.ps.all.clean)[["cooks"]]))
+cooks.clean <- rowMeans(cooks.clean, na.rm = TRUE)
 
+diagdds_taxas = function(ps, taxa_level){
+    physeq <- taxa_level(ps, taxa_level)
+    diagdds <- phyloseq_to_deseq2(physeq, ~ Repeats)
+    diagdds <- DESeq(diagdds, test="Wald", fitType="parametric")
+    res = results(diagdds)
+    res.df <- as.data.frame(res)
+    return(res.df)
+}                    
                   
+Des.Lise <- function(ps){
+    otus.ps.vegan <- veganifyOTU(ps.forest)
+    metadata <- as(sample_data(ps.forest), "data.frame")
+    sim <- with(metadata, simper(otus.ps.vegan, Repeats))
+    simper <- cbind(sim$N2_O_N1_R1$species,sim$N2_O_N1_R1$average)
+    simper <- colnames(c("ID","ave_sim"))
+    simper <- as.data.frame(simper, row.names = "ID")
+    simper <- column_to_rownames(simper, var = "ID")
+    diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
+    gm_mean = function(x, na.rm=TRUE){
+      exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+        }
+    geoMeans = apply(counts(diagdds), 1, gm_mean)
+    diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+    diagdds = DESeq(diagdds, fitType="local")
+    samp <-sample_data(ps)
+    dds.counts <- diagdds@assays@.xData$data$counts
+    dds.counts.df <- as.data.frame(dds.counts)
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Repeats), median))
+    colnames(aggdata) <- aggdata[1,]
+    aggdata <- aggdata[-1,]
+    res = results(diagdds)
+    res.df <- as.data.frame(res)
+    nice <- cbind(res.df, simper[rownames(res.df),], as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
+    
+    return(nice)
+}                  
                   
-                     
+ 
+Des.Norm <- function(ps){
+    diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
+    gm_mean = function(x, na.rm=TRUE){
+        exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+    }
+    geoMeans = apply(counts(diagdds), 1, gm_mean)
+    diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+    diagdds = DESeq(diagdds, fitType="local")
+    dds.counts <- diagdds@assays@.xData$data$counts
+    dds.counts.df <- as.matrix(dds.counts)
+    ps.norm.dec <- phyloseq(otu_table(t(dds.counts.df), taxa_are_rows=FALSE), 
+        sample_data(ps@sam_data), 
+        tax_table(ps@tax_table@.Data),
+        phy_tree(ps@phy_tree))
+    ps.norm.dec
+    nice <- ps.norm.dec
+    
+    return(nice)
+}     
+    
+Des.Tax = function(ps, Taxa){
+    ps <- taxa_level(ps, Taxa)
+    diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
+    gm_mean = function(x, na.rm=TRUE){
+        exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+    }
+    geoMeans = apply(counts(diagdds), 1, gm_mean)
+    diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+    diagdds = DESeq(diagdds, fitType="local")    
+    samp <-sample_data(ps)
+    dds.counts <- diagdds@assays@.xData$data$counts
+    dds.counts.df <- as.data.frame(dds.counts)
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Repeats), median))
+    colnames(aggdata) <- aggdata[1,]
+    aggdata <- aggdata[-1,]
+    res = results(diagdds)
+    res.df <- as.data.frame(res)
+    nice <- cbind(res.df, as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
+    
+    return(nice)
+}                    
+                  

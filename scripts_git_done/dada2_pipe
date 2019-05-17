@@ -1,3 +1,8 @@
+mkdir XXX
+ls | grep XXX | xargs cp -t  ~/storage/XXX/
+
+ls | grep shapkin | xargs cp -t ~/storage/plates/others
+
 mult <- 4 # TRUE
 mlt <- 4 # NULL
 path <- "/home/gladkov/storage/mal/temp"
@@ -15,7 +20,8 @@ library(seqinr)
 library(data.table)
 library(metagMisc)
 library(ampvis2)
-d
+library(tibble)
+
 
 fnFs <- sort(list.files(path, pattern="_R1_001.fastq", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
@@ -54,7 +60,7 @@ alignment <- AlignSeqs(DNAStringSet(dna), anchor=NA,verbose=FALSE, processors = 
 writeXStringSet(alignment, file="align.fasta")
 
 taxa.dada2 <- assignTaxonomy(briefToSeq,path_trein_set , multithread=mult)
-taxa.dada2.species <- assignSpecies(seqs, path_trein_set_species) # maybe use not seqs but brief 
+taxa.dada2.species <- assignSpecies(briefToSeq, path_trein_set_species) # maybe use not seqs but brief 
 rownames(taxa.dada2.species) <- rownames(briefToSeq)
 briefToSeq.df <- data.frame(briefToSeq)
 rownames(taxa.dada2.species) <- rownames(briefToSeq.df)
@@ -72,7 +78,7 @@ write.fasta( briefToSeq.ls, briefToSeq.names , "rep_seq.fasta", as.string = FALS
 
 #IN BASH
 
-source activate qiime2-2018.11
+conda activate qiime2-2019.1
 sed -i '1s/^/#OTU_ID/' otu_table.txt 
 biom convert -i otu_table.txt -o otu_table.biom --to-hdf5
 
@@ -81,8 +87,7 @@ qiime tools import \
   --output-path rep_seq.qza \
   --type 'FeatureData[Sequence]'
 
-qiime fragment-insertion sepp --i-representative-sequences rep_seq.qz
-a  --o-tree insertion-tree.qza  --o-placements insertion-placements.qza --p-threads 4
+qiime fragment-insertion sepp --i-representative-sequences rep_seq.qza  --o-tree insertion-tree.qza  --o-placements insertion-placements.qza --p-threads 16
 
 qiime tools import \
   --input-path otu_table.biom \
@@ -302,5 +307,9 @@ AY 0.297 1144
 AC 0.117 523
 C 0.160 429
 
+amp_heatmap(amp, group_by = "Site", facet_by = "Horizont", tax_show = 40,tax_aggregate = "Genus", tax_add = "Family", color_vector = c("white","azure4"))
 
+subset_taxa(GlobalPatterns, (Order!="Chloroplast") | (Family!="Mitochondria"))
+ps.f <- subset_taxa(ps, (Order!="Chloroplast") | (Family!="Mitochondria"))
+ps.f <- subset_samples(ps, (ID!="Belimov-24") | (ID!="Belimov-42"))
 
