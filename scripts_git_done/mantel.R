@@ -63,6 +63,23 @@ plot(vare.cca,choices=c(1,2),display=c("wa","bp"),type="points",xlim=c(-4,1.5),s
 points(vare.cca,disp="sites",pch=21,col="red",bg="red",cex=1.3)
 text(vare.cca,"sites",pos=3,axis.bp=TRUE)
 
+otus.ps.vegan <- veganifyOTU(ps.7307)
+otus.ps.vegan.descrnames <- otus.ps.vegan
+rownames(otus.ps.vegan.descrnames) <- ps.7307@sam_data$Description
+metadata <- as(sample_data(ps.7307), "data.frame")
+vare.cca <- cca(otus.ps.vegan.descrnames ~ pH + SoilAl, data=metadata)
+plot(vare.cca,choices=c(1,2),display=c("wa","bp"),type="points",xlim=c(-4,4),scaling=2)
+points(vare.cca,disp="sites",pch=21,col="red",bg="red",cex=1)
+text(vare.cca,"sites",pos=4,axis.bp=TRUE)
+
+
+
+
+
+
+
+
+
 mantel.local <- function(ps, ){
     gr.map.d <- as.data.frame(gr.map.num)
     gr.map.num <- mapply(gr.map, FUN=as.numeric)

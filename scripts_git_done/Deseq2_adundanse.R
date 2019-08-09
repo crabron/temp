@@ -82,14 +82,14 @@ diagdds_taxas = function(ps, taxa_level){
 }                    
                   
 Des.Lise <- function(ps){
-    otus.ps.vegan <- veganifyOTU(ps.forest)
-    metadata <- as(sample_data(ps.forest), "data.frame")
-    sim <- with(metadata, simper(otus.ps.vegan, Repeats))
-    simper <- cbind(sim$N2_O_N1_R1$species,sim$N2_O_N1_R1$average)
-    simper <- colnames(c("ID","ave_sim"))
+    otus.ps.vegan <- veganifyOTU(ps)
+    metadata <- as(sample_data(ps), "data.frame")
+    sim <- with(metadata, simper(otus.ps.vegan, Description))
+    simper <- cbind(sim$s1903_In_s1903_In_Al$species,sim$s1903_In_s1903_In_Al$average)
+    colnames(simper) <- c("ID","ave_sim")
     simper <- as.data.frame(simper, row.names = "ID")
     simper <- column_to_rownames(simper, var = "ID")
-    diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
+    diagdds <- phyloseq_to_deseq2(ps, ~ Description)
     gm_mean = function(x, na.rm=TRUE){
       exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
         }
@@ -99,7 +99,7 @@ Des.Lise <- function(ps){
     samp <-sample_data(ps)
     dds.counts <- diagdds@assays@.xData$data$counts
     dds.counts.df <- as.data.frame(dds.counts)
-    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Repeats), median))
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
     colnames(aggdata) <- aggdata[1,]
     aggdata <- aggdata[-1,]
     res = results(diagdds)
@@ -132,7 +132,7 @@ Des.Norm <- function(ps){
     
 Des.Tax = function(ps, Taxa){
     ps <- taxa_level(ps, Taxa)
-    diagdds <- phyloseq_to_deseq2(ps, ~ Repeats)
+    diagdds <- phyloseq_to_deseq2(ps, ~ Description)
     gm_mean = function(x, na.rm=TRUE){
         exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
     }
@@ -142,7 +142,7 @@ Des.Tax = function(ps, Taxa){
     samp <-sample_data(ps)
     dds.counts <- diagdds@assays@.xData$data$counts
     dds.counts.df <- as.data.frame(dds.counts)
-    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Repeats), median))
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
     colnames(aggdata) <- aggdata[1,]
     aggdata <- aggdata[-1,]
     res = results(diagdds)
@@ -150,5 +150,88 @@ Des.Tax = function(ps, Taxa){
     nice <- cbind(res.df, as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
     
     return(nice)
-}                    
+}   
                   
+Des.Phylo <-  function(ps, Taxa){
+    ps <- taxa_level(ps, Taxa)
+    diagdds <- phyloseq_to_deseq2(ps, ~ Description)
+    gm_mean = function(x, na.rm=TRUE){
+        exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+    }
+    geoMeans = apply(counts(diagdds), 1, gm_mean)
+    diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+    diagdds = DESeq(diagdds, fitType="local")    
+    samp <-sample_data(ps)
+    dds.counts <- diagdds@assays@.xData$data$counts
+    dds.counts.df <- as.data.frame(dds.counts)
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
+    colnames(aggdata) <- aggdata[1,]
+    aggdata <- aggdata[-1,]
+    res = results(diagdds)
+    res.df <- as.data.frame(res)
+    nice <- cbind(res.df, as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
+    
+    return(nice)
+}   
+
+                  
+                  
+ps.1903 <- prune_taxa(taxa_sums(ps.1903) > 0, ps.1903)                  
+diagddsraw = phyloseq_to_deseq2(ps.1903, ~ Description)                  
+iagdds = estimateSizeFactors(diagddsraw, type="poscounts")                  
+GPdds = estimateDispersions(iagdds, fitType = "local")                  
+otu_table(ps.1903.varstab) <- otu_table(t(getVarianceStabilizedData(GPdds)), taxa_are_rows = FALSE)                  
+  
+
+ps.1903.mod <- prune_taxa(taxa_sums(ps.1903) > 10, ps.1903)              
+diagdds <- phyloseq_to_deseq2(ps.1903.mod, ~ Description)                  
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+    }
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+pst <- varianceStabilizingTransformation(diagdds, fitType="mean")               
+pst.dimmed <- t(as.matrix(assay(pst))) 
+pst.dimmed[pst.dimmed < 0.0] <- 0.0 
+ps.varstab.mod <- ps.1903.mod            
+otu_table(ps.varstab.mod) <- otu_table(pst.dimmed, taxa_are_rows = FALSE)   
+ordination.b <- ordinate(ps.varstab.mod, "PCoA", "bray")                  
+p <- plot_ordination(ps.varstab.mod, ordination.b, type="sample", color="Al", shape="Inoculation", title="PCoA - Bray", axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+p + stat_ellipse( type="norm", alpha=0.7)              
+                                    
+                  
+            
+diagdds <- phyloseq_to_deseq2(ps.1903,  ~ Description)   
+                  
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+pst <- varianceStabilizingTransformation(diagdds, fitType="mean")               
+pst.dimmed <- t(as.matrix(assay(pst))) 
+pst.dimmed[pst.dimmed < 0.0] <- 0.0 
+ps.varstab.mod <- ps.1903.mod            
+otu_table(ps.varstab.mod) <- otu_table(pst.dimmed, taxa_are_rows = FALSE)                 
+                  
+Des.Al <- function(ps){
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+   diagdds = DESeq(diagdds)
+    samp <-sample_data(ps)
+    dds.counts <- diagdds@assays@.xData$data$counts
+    dds.counts.df <- as.data.frame(dds.counts)
+    aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
+    colnames(aggdata) <- aggdata[1,]
+    aggdata <- aggdata[-1,]
+    res = results(diagdds)
+    res.df <- as.data.frame(res)
+    nice <- cbind(res.df,as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])               
+    return(nice)
+}               
+                  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  pst <- varianceStabilizingTransformation(diagdds)
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE)              

@@ -19,3 +19,13 @@ p = plot_ordination(ps.f.norm, ordination, type="sample", color="Repeats", shape
 p4 <- p + stat_ellipse( type="norm", alpha=0.7)
 
 ggarrange(p1, p2, p3, p4, ncol = 2 , nrow = 2)
+
+
+library(ggplot)
+library(plyr)
+
+lise.heat.1 <- read.csv("lise_heat_1.csv" , header=TRUE, sep="\t")
+
+somedata <- ddply(lise.heat.1, .(Site),transform, pos = cumsum(Size) - (0.5 * Size))
+
+ggplot() + geom_bar(aes(y = Size, x = Site, fill = OTU), data = somedata,  stat="identity", colour = "black") + geom_text(data = somedata, aes(x = Site, y = pos, label = X), size = 3) + scale_fill_gradient(low = "azure", high = "darkred", name = "Nitrososphaeraceae") +  theme(axis.title.y=element_blank(),axis.text.y=element_blank(), axis.ticks.y.right=element_blank(), axis.title.x=element_blank(),axis.text=element_text(size=13))

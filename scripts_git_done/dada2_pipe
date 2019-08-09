@@ -309,3 +309,17 @@ subset_taxa(GlobalPatterns, (Order!="Chloroplast") | (Family!="Mitochondria"))
 ps.f <- subset_taxa(ps, (Order!="Chloroplast") | (Family!="Mitochondria"))
 ps.f <- subset_samples(ps, (ID!="Belimov-24") | (ID!="Belimov-42"))
 
+pop.taxa <- function(physeq, badTaxa){
+    allTaxa = taxa_names(physeq)
+    myTaxa <- allTaxa[!(allTaxa %in% badTaxa)]
+    return(prune_taxa(myTaxa, physeq))
+}
+
+
+delete_mit_chl <- function(ps){
+    badTaxa <- taxa_names(subset_taxa(ps, Order=="Chloroplast"))
+    ps <- pop_taxa(ps, badTaxa)
+    badTaxa <- taxa_names(subset_taxa(ps, Family=="Mitochondria"))
+    ps <- pop_taxa(ps, badTaxa)
+    return(ps)
+}

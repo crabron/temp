@@ -20,19 +20,22 @@ colnames(kim.fake.otu)<-rownames(kim.map.nodx)
 rownames(kim.fake.otu)<- c("otu1","otu2","otu3","otu4")
 kim.ps <- phyloseq(otu_table(t(kim.fake.otu), taxa_are_rows=FALSE), sample_data(kim.map.nodx))
 
-kim_dist_plot <- function(ps, fasta, color, label){dist <- dist.dna(fasta)
+kim_dist_plot <- function(ps,  fasta, color, label){dist <- dist.dna(fasta)
 fasta.pcoa <- pcoa(dist, correction="none")
 p <- plot_ordination(ps, fasta.pcoa, type = "samples", axes = 1:2,color=color, label=label)
 return(p)
 }
 
 
-
-dist <- distance(ps, "bray")
-metadata <- as(sample_data(ps), "data.frame")
-adonis2(dist ~ Site, data = metadata)
-
-
+permanova <- function(ps, Factor, dist = "bray"){
+    require(phyloseq)
+    require(vegan)
+    dist <- distance(ps, dist)
+    metadata <- as(sample_data(ps), "data.frame")
+    ad <- adonis2(dist ~ Factor, data = metadata)
+    return(ad)
+}
+    
 permanova.local <- function(ps, plant, factor){
     ps.pruned <- prune_samples(sample_data(ps)$Plant %in% c(plant), ps)
     dist <- distance(ps.pruned, "bray")
