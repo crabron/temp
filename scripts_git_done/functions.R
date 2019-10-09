@@ -489,7 +489,7 @@ beta_for_Svir_with_norm_NMDS <- function(ps, seed = 5433){
   #plotting
   # first row for 1-2 axis
   
-  p = plot_ordination(ps, ordination.b, type="sample", color="", shape="Soil", title="NMDS - Bray", 
+  p = plot_ordination(ps, ordination.b, type="sample", color="Type", shape="Soil", title="NMDS - Bray", 
                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
   p1.1 <- p + stat_ellipse( type="norm", alpha=0.7)
   
@@ -498,6 +498,55 @@ beta_for_Svir_with_norm_NMDS <- function(ps, seed = 5433){
   p1.2 <- p + stat_ellipse( type="norm", alpha=0.7)
   
   p = plot_ordination(ps, ordination.w, type="sample", color="Type", shape="Soil", title="NMDS - wunifrac", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.3 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1.1, p1.2, p1.3, ncol = 3 , nrow = 1)
+  
+  return(p.all)
+}
+
+beta_for_Plates_with_norm_NMDS <- function(ps, seed = 5433){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  
+  
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Repeats)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  pst <- varianceStabilizingTransformation(diagdds)
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  #  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  # first row for 1-2 axis
+  
+  p = plot_ordination(ps.varstab, ordination.b, type="sample", color="Type", shape="Soil", title="NMDS - Bray", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.1 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  p = plot_ordination(ps.rand, ordination.u, type="sample", color="Type", shape="Soil", title="NMDS - unifrac", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.2 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  p = plot_ordination(ps.varstab, ordination.w, type="sample", color="Type", shape="Soil", title="NMDS - wunifrac", 
                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
   p1.3 <- p + stat_ellipse( type="norm", alpha=0.7)
   
