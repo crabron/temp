@@ -1,3 +1,7 @@
+# Svir dataset
+# 5-7 sites
+# The first approaches -- ls(SS) workshop
+
 func.more <- function(x){ 
   ress <- x[1] > x[2] | x[1] > x[3] | x[3] > x[4]
   return(ress)
@@ -554,12 +558,6 @@ bray.steppo <- function(some_number){
   return(jacco.mean)
 }
 
-bray.steppo <- function(some_number){
-  some_ps <- prune_taxa(taxa_sums(some_ps) > some_number , some_ps) 
-  jacco.mean <- mean(phyloseq::distance(some_ps, method = "bray", type = "samples"))
-  return(jacco.mean)
-}
-
 wuni.steppo <- function(some_number){
   some_ps <- prune_taxa(taxa_sums(some_ps) > some_number , some_ps) 
   jacco.mean <- mean(phyloseq::distance(some_ps, method = "wunifrac", type = "samples"))
@@ -573,7 +571,7 @@ uni.steppo <- function(some_number){
 }
 
 some_ps <- ps.s.bf.57
-max.nice <- 
+while(which(length(taxa_sums(some_ps)) <= 30)))
 seq.list <- seq(min(taxa_sums(some_ps)), max(taxa_sums(some_ps)), by=10)
 seq.list <- seq(min(taxa_sums(some_ps)), 500, by=10)
 bray.list <- sapply(seq.list, bray.steppo)
@@ -586,4 +584,72 @@ plot(uni.list)
 require(dplyr)
 require(ggpubr)
 
-ggarrange(p1, p2б, labels = c("bray","wunifrac"))  
+ggarrange(p1, p2б, labels = c("bray","wunifrac")) 
+
+# the last version of beta-steppo code
+
+library(tidyverse)
+
+# the anonimeus function - because I can
+len.col <- function(x) length(taxa_names(prune_taxa(taxa_sums(some_ps) >= x, some_ps))) >= 30
+# ctreate a sequence list to literate throught
+seq.list <- seq(0, max(taxa_sums(some_ps)), by=10) %>% purrr::head_while(len.col)
+# bray: prune by the phyloseq package functions - veganisation - bray by vegan, simple mean 
+bray.steppo <- function(some_number, distance = "bray", ps = some.ps){
+  some_ps <- prune_taxa(taxa_sums(some_ps) > some_number , some_ps) 
+  otus.dt <- as.data.frame(some_ps@otu_table@.Data)
+  jacco.mean <- mean(vegdist(otus.dt, method = distance))
+  return(jacco.mean)
+}
+
+bray.steppo.nm <- function(some_number, distance = "bray", ps = some.ps){
+  some_ps <- prune_taxa(taxa_sums(some_ps) > some_number , some_ps) 
+  otus.dt <- as.data.frame(some_ps@otu_table@.Data)
+  jacco.mean <- as.list(vegdist(otus.dt, method = distance))
+  return(jacco.mean)
+}
+
+
+bray.list <- sapply(seq.list, bray.steppo.nm)
+bray.list <- bray.steppo.nm(0, ps = some_ps)
+bray.list
+length(bray.list)
+
+wuni.list <- sapply(seq.list, wuni.steppo)
+uni.list <- sapply(seq.list, uni.steppo)
+bray.list
+plot(bray.list)
+plot(wuni.list)
+plot(uni.list)
+
+vegdist(otus.dt, method = "bray") %>% as.list
+
+# train taxa reference set
+
+getwd()
+library(tidyverse)
+library(DECIPHER)
+seqs_path <- "~/storage/somebases/SILVA_138_SSURef_tax_silva.fasta"
+
+seqs <- readDNAStringSet(seqs_path)
+head(seqs)
+taxid <- NULL
+groups <- names(seqs)
+head(groups.2)
+groups.2 <- gsub("(.*\\..*\\.[0-9]+ )(.*)", "\\2", groups)
+groups.2
+groups[922]
+groupCounts <- table(groups.2)
+u_groups <- names(groupCounts)
+length(u_groups)
+length(groups.2)
+
+# try some oldfasion methods from the 1000th tutorial
+library(phyloseq)
+library(DESeq2)
+
+ps.s.bf.57@sam_data
+
+
+
+

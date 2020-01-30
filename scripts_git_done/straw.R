@@ -116,8 +116,6 @@ ps.f.pod <- prune_samples(sample_data(ps.f)$Soil %in% c("podzolic"), ps.f)
 ps.f.pod <- prune_taxa(taxa_sums(ps.f.pod) > 0,ps.f.pod)
 
 
-
-
 ps.f@sam_data$Soil
 
 permanova.straw <- function(ps, dist = "bray"){
@@ -145,6 +143,7 @@ permanova.straw <- function(ps, dist = "bray"){
   ad <- adonis2(dist ~ Duration, data = metadata, permutations = 10000)
   return(ad)
 }
+
 permanova.straw(ps.f.dna, dist="bray")
 permanova.straw(ps.f.rna, dist="bray")
 
@@ -483,10 +482,6 @@ p <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, line
 p
 
 
-
-
-
-
 d3 <- data.frame(id=tree$tip.label, pod = des.otus.pod.n1.pr$log2FoldChange, chr = des.otus.chr.n1.pr$log2FoldChange)
 d3[d3<0] <- 0
 pod.per <- d3$pod / (d3$pod + d3$chr)
@@ -509,7 +504,6 @@ gt # see plot layout in table format
 gt$layout$l[grep('panel-2', gt$layout$name)] # you want to find the column specific to panel-2
 gt$widths[7] = 0.6*gt$widths[7] # in this case it was colmun 7 - reduce the width by a half
 grid.draw(gt) # plot with grid draw
-
 
 d3 <- data.frame(id=tree$tip.label, pod = des.otus.pod.n1.pr$log2FoldChange, chr = des.otus.chr.n1.pr$log2FoldChange)
 d3$id <- rev(d3$id)
@@ -546,7 +540,6 @@ dd <- psmelt(ps.f.pr)
 sum(dd$Abundance)/1198446 * 100
 dd <- psmelt(ps.f)
 amp
-
 
 
 #for des soils
@@ -592,7 +585,6 @@ ps.f.merged.soil <- merge_samples(ps.f.pr.soils, "Soil")
 melted.soils <- psmelt(ps.f.merged.soil)
 adundance <- melted.soils$Abundance / sum(melted.soils$Abundance)*100
 sigtab = res[(res$padj < alpha), ]
-
 
 phyloseq <-  ps.f.pr.soils
 require(phyloseq)
@@ -661,10 +653,15 @@ ps.its <- prune_samples(sample_data(ps.its)$Work %in% c("yes"), ps.its)
 ps.its <- prune_taxa(taxa_sums(ps.its) > 0, ps.its) 
 amp.its <- phyloseq_to_amp_without_tree(ps.its)
 amp.its
-amp_heatmap(amp.its, group_by = "Подписи",tax_add = "Phylum", tax_show = 40, tax_aggregate = "Family") + theme_bw() + theme(text = element_text(size=15), legend.position = "none")
+library(ampvis2)
+order_x=naturalsort(levels(ps.its@sam_data$Подписи))
+order_x_2 <- append(order_x, order_x)
+amp_heatmap(amp.its, group_by = "Подписи",tax_add = "Phylum", tax_show = 40, tax_aggregate = "Genus", facet_by = "Почва") + theme_bw() + theme(text = element_text(size=15), legend.position = "none")
 amp_ph <- amp_heatmap(amp, group_by = "Pool", tax_show = 15, tax_aggregate = "Phylum") + theme_bw() + theme(text = element_text(size=17), legend.position = "none")
 amp_class <- amp_heatmap(amp, group_by = "Pool", tax_show = 15, tax_aggregate = "Class") + theme_bw() + theme(text = element_text(size=17), legend.position = "none")
-
+amp.its
+library(phyloseq)
+ps.its@sam_data
 beta_custom_norm_NMDS_elli_bray <- function(ps, normtype="vst", color="Подписи"){
   require(phyloseq)
   require(ggplot2)
@@ -717,4 +714,16 @@ p1 <- beta_custom_norm_NMDS_elli_bray(ps.its.pod)
 p2 <- beta_custom_norm_NMDS_elli_bray(ps.its.chr)
 ggarrange(p1, p2, ncol = 1, nrow = 2, label.y = 0.99, label.x = 0.7,  labels = c("Дерново-подзолистая почва","Чернозем"), font.label = list(size = 14, face = "bold", color ="black"))
 
+mapp_5 <- read.csv("~/storage/straw_dna_rna/its/mapping_its_5.csv", header=TRUE, sep="\t")
+map.its.5 <- data.frame(row.names="ID", mapp_5)
+
 amp.its
+sam_data(ps.its) <- map.its.5 
+source("~/storage/scripts_git_done/functions.R")
+amp.n <- phyloseq_to_amp_without_tree(ps.its)
+reshape2::melt(tree)
+
+write.table(ps.s@otu_table, file = "otu.tsv", sep= "\t", col.names = NA, quote=FALSE)
+write.table(ps.s@tax_table@.Data, file = "taxa.tsv", sep= "\t", col.names = NA, quote=FALSE)
+write.table(ps.s@sam_data, file = "map.tsv", sep= "\t", col.names = NA, quote=FALSE)
+ape::write.tree(ps.s@phy_tree, "tree.tree")
