@@ -79,6 +79,7 @@ beta_for_Al <- function(ps){
 
 
 kate.ggcca.sites <- function(vare.cca){
+  require(ggvegan)
   require(vegan)
   require(ggplot2)
   require(dplyr)
@@ -93,6 +94,8 @@ kate.ggcca.sites <- function(vare.cca){
 
 
 kate.ggcca.species <- function(vare.cca){
+  
+  require(ggvegan)
   require(vegan)
   require(ggplot2)
   require(dplyr)
@@ -239,6 +242,21 @@ permanova.inoculation <- function(ps, dist = "bray"){
   return(ad)
 }
 
+
+permanova.custom <- function(ps, split = FALSE, factor = "Type", factor_variance = "pos", dist = "bray", formula = dist ~ Repeats){
+  require(phyloseq)
+  require(vegan)
+  while (split){
+    ps.Cd <- prune_samples(sample_data(ps)$Cd %in% c("pos"), ps)
+    ps.Cd <- prune_taxa(taxa_sums(ps.Cd) > 0, ps.Cd)    
+  }
+  dist <- distance(ps, dist)
+  metadata <- as(sample_data(ps), "data.frame")
+  ad <- adonis2(dist ~ split_factor, data = metadata)
+  return(ad)
+}
+
+
 permanova.al <- function(ps, dist = "bray"){
   require(phyloseq)
   require(vegan)
@@ -328,14 +346,14 @@ al.ggcca.species <- function(vare.cca){
 }
 
 Des.Al <- function(ps){
-  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = phyloseq_to_deseq2(ps, ~ Drought)                  
   diagdds = estimateSizeFactors(diagdds, type="poscounts")
   diagdds = estimateDispersions(diagdds, fitType = "local") 
   diagdds = DESeq(diagdds)
   samp <-sample_data(ps)
   dds.counts <- diagdds@assays@.xData$data$counts
   dds.counts.df <- as.data.frame(dds.counts)
-  aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
+  aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Drought), median))
   colnames(aggdata) <- aggdata[1,]
   aggdata <- aggdata[-1,]
   res = results(diagdds)
@@ -346,14 +364,14 @@ Des.Al <- function(ps){
 
 Des.Tax = function(ps, Taxa){
   ps <- taxa_level(ps, Taxa)
-  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = phyloseq_to_deseq2(ps, ~ Drought)                  
   diagdds = estimateSizeFactors(diagdds, type="poscounts")
   diagdds = estimateDispersions(diagdds, fitType = "local") 
   diagdds = DESeq(diagdds)
   samp <-sample_data(ps)
   dds.counts <- diagdds@assays@.xData$data$counts
   dds.counts.df <- as.data.frame(dds.counts)
-  aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Description), median))
+  aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Drought), median))
   colnames(aggdata) <- aggdata[1,]
   aggdata <- aggdata[-1,]
   res = results(diagdds)
@@ -554,6 +572,56 @@ beta_for_Plates_with_norm_NMDS <- function(ps, seed = 5433){
   #merge by ggpubr
   
   p.all <- ggarrange(p1.1, p1.2, p1.3, ncol = 3 , nrow = 1)
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS <- function(ps, seed = 6788, normtype="vst", color="Cd", shape="Drought"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Repeats)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p = plot_ordination(ps, ordination.b, type="sample", color, shape, title="NMDS - Bray", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.1 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  p = plot_ordination(ps, ordination.u, type="sample", color, shape, title="NMDS - unifrac", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.2 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  p = plot_ordination(ps, ordination.w, type="sample", color, shape, title="NMDS - wunifrac", 
+                      axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
+  p1.3 <- p + stat_ellipse( type="norm", alpha=0.7)
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1.1, p1.2, p1.3, ncol = 3 , nrow = 1, common.legend = TRUE, legend = "right")
   
   return(p.all)
 }

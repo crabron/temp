@@ -56,7 +56,8 @@ briefToSeq.ls <- as.list(briefToSeq.df[,c("briefToSeq")])
 briefToSeq.names <- as.list(rownames(briefToSeq.df))
 write.fasta( briefToSeq.ls, briefToSeq.names , "rep_seq.fasta", as.string = FALSE)
       
-      system("conda activate qiime2-2019.1
+      system("sleep 2h
+conda activate qiime2-2019.1
       sed -i '1s/^/#OTU_ID/' otu_table.txt 
       biom convert -i otu_table.txt -o otu_table.biom --to-hdf5
       qiime tools import \
@@ -132,6 +133,17 @@ ps.f.i.Cdt.noCd <- prune_samples(sample_data(ps.f.i.Cdt)$Cd %in% c("neg"), ps.f.
 ps.f.i.Cdt.noCd <- prune_taxa(taxa_sums(ps.f.i.Cdt.noCd) > 0, ps.f.i.Cdt.noCd) 
 ps.f.i.Cdt.Cd <- prune_samples(sample_data(ps.f.i.Cdt)$Cd %in% c("pos"), ps.f.i.Cdt)
 ps.f.i.Cdt.Cd <- prune_taxa(taxa_sums(ps.f.i.Cdt.Cd) > 0, ps.f.i.Cdt.Cd)
+
+ps.f.i.wt.dr <- prune_samples(sample_data(ps.f.i.wt)$Drought %in% c("pos"), ps.f.i.wt)
+ps.f.i.wt.wet <- prune_taxa(taxa_sums(ps.f.i.wt.wet) > 0, ps.f.i.wt.wet) 
+ps.f.i.wt.wet <- prune_samples(sample_data(ps.f.i.wt)$Drought %in% c("neg"), ps.f.i.wt)
+ps.f.i.wt.wet <- prune_taxa(taxa_sums(ps.f.i.wt.wet) > 0, ps.f.i.wt.wet) 
+ps.f.i.Cdt.dr <- prune_samples(sample_data(ps.f.i.Cdt)$Drought %in% c("neg"), ps.f.i.Cdt)
+ps.f.i.Cdt.dr <- prune_taxa(taxa_sums(ps.f.i.Cdt.dr) > 0,ps.f.i.Cdt.dr) 
+ps.f.i.Cdt.wet <- prune_samples(sample_data(ps.f.i.Cdt)$Drought %in% c("pos"), ps.f.i.Cdt)
+ps.f.i.Cdt.wet <- prune_taxa(taxa_sums(ps.f.i.Cdt.wet) > 0, ps.f.i.Cdt.wet)
+
+
 
 
 amp_boxplot(amp.f,
@@ -242,26 +254,26 @@ amp_heatmap_grouped <- function(ps){
   require(ggpubr)
   
   # split the original dataset into two then convert the goddamnned phyloseq object into ampvis2 asshanded class
-  ps.Cd <- prune_samples(sample_data(ps)$Cd %in% c("pos"), ps)
+  ps.Cd <- prune_samples(sample_data(ps)$Drought %in% c("pos"), ps)
   ps.Cd <- prune_taxa(taxa_sums(ps.Cd) > 0, ps.Cd)  
   amp.Cd <- phyloseq_to_amp(ps.Cd)
   
-  ps.wCd <- prune_samples(sample_data(ps)$Cd %in% c("neg"), ps)
+  ps.wCd <- prune_samples(sample_data(ps)$Drought %in% c("neg"), ps)
   ps.wCd <- prune_taxa(taxa_sums(ps.wCd) > 0, ps.wCd)  
   amp.wCd <- phyloseq_to_amp(ps.wCd)
   
   # plot some ampvised heatmaps
   p.heat.Cd <- amp_boxplot(amp.wCd,
-              group_by = "Drought",
+              group_by = "Cd",
               tax_show = 8,
               tax_aggregate = "Phylum",
-              tax_class = "Proteobacteria") + labs(title = "Cd-", color = "drought") + theme_bw() + theme(text = element_text(size=14))
+              tax_class = "Proteobacteria") + labs(title = "низкая влажность", color = "Cd") + theme_bw() + theme(text = element_text(size=14))
 
   p.heat.wCd <- amp_boxplot(amp.Cd,
-              group_by = "Drought",
+              group_by = "Cd",
               tax_show = 8,
               tax_aggregate = "Phylum",
-              tax_class = "Proteobacteria") + labs(title = "Cd+", color = "drought") + theme_bw()  + theme(text = element_text(size=14))
+              tax_class = "Proteobacteria") + labs(title = "обычная влажность", color = "Cd") + theme_bw()  + theme(text = element_text(size=14))
   
   p <- ggarrange(p.heat.Cd, p.heat.wCd, ncol = 2 ,label.x = 0.105, nrow = 1, common.legend = TRUE)
   return(p)
@@ -276,7 +288,7 @@ permanova.454 <- function(ps, dist = "bray"){
   require(vegan)
   dist <- phyloseq::distance(ps, dist)
   metadata <- as(sample_data(ps), "data.frame")
-  ad <- adonis2(dist ~ Drought, data = metadata, permutations = 10000)
+  ad <- adonis2(dist ~ Cd, data = metadata, permutations = 10000)
   return(ad)
 }
 
@@ -413,3 +425,206 @@ mantel.all <- function(ps, dist = "bray"){
   return(d.mantel)
 }
 
+library(phyloseq)
+
+ps.f.i.Cd <- prune_samples(sample_data(ps.f.i)$Cd %in% c("pos"), ps.f.i)
+ps.f.i.Cd <- prune_taxa(taxa_sums(ps.f.i.Cd) > 0, ps.f.i.Cd) 
+ps.f.i.noCd <- prune_samples(sample_data(ps.f.i)$Cd %in% c("neg"), ps.f.i)
+ps.f.i.noCd <- prune_taxa(taxa_sums(ps.f.i.noCd) > 0, ps.f.i.noCd) 
+ps.f.i.Cdt.noCd <- prune_samples(sample_data(ps.f.i.Cdt)$Cd %in% c("neg"), ps.f.i.Cdt)
+ps.f.i.Cdt.noCd <- prune_taxa(taxa_sums(ps.f.i.Cdt.noCd) > 0, ps.f.i.Cdt.noCd) 
+ps.f.i.Cdt.Cd <- prune_samples(sample_data(ps.f.i.Cdt)$Cd %in% c("pos"), ps.f.i.Cdt)
+ps.f.i.Cdt.Cd <- prune_taxa(taxa_sums(ps.f.i.Cdt.Cd) > 0, ps.f.i.Cdt.Cd)
+
+ps.f.i.Cd.pr <- prune_taxa(taxa_sums(ps.f.i.Cd) > 100, ps.f.i.Cd)
+ps.f.i.noCd.pr <- prune_taxa(taxa_sums(ps.f.i.noCd) > 100, ps.f.i.noCd)
+
+# correlatin networks. Shitty the shit - seen the jaccard test result and will've not try this shit with 454 data in future.
+
+cor.otu.Cd <- cor(ps.f.i.Cd.pr@otu_table@.Data, method = "spearman")
+cor.otu.noCd <- cor(ps.f.i.Cd.pr@otu_table@.Data, method = "spearman")
+
+cor_g <- graph_from_adjacency_matrix(cor.otu.Cd, mode='undirected', weighted = 'correlation')
+cor_edge_list <- as_data_frame(cor_g, 'edges')
+only_sig <- cor_edge_list[abs(cor_edge_list$correlation) > .75, ]
+new_g <- graph_from_data_frame(only_sig, F) 
+plot.igraph(new_g)
+
+require(igraph)
+require(tibble)
+require(RColorBrewer)
+tax.phylum <- as.data.frame(tax.Cd.d$Phylum)
+
+tax.Cd.d <- as.data.frame(ps.f.i.Cd.pr@tax_table@.Data)
+lev <- levels(tax.Cd.d$Phylum)
+len_lev <- length(lev)
+pal <- brewer.pal(len_lev,"Accent")
+vertex_colour <- cbind(lev, pal)
+vertex_colour <- as.data.frame(vertex_colour)
+vertex_colour <- column_to_rownames(vertex_colour, "lev")
+vertex_colour_test <- merge(vertex_colour, tax.phylum)
+
+Group <- gl(7, 2, labels = lev)
+View(vertex.col)
+vertex.col <- pal[tax.Cd.d$Phylum]
+
+
+rownames(vertex_colour_test) <- rownames(tax.Cd.d$Phylum)
+cor.otu.noCd.d <- as.data.frame(cor.otu.noCd)
+
+gpaph.Cd <- graph_from_data_frame(cor.otu.Cd.d)
+plot.igraph(new_g, edge.arrow.size=.4, vertex.color=vertex.col, vertex.size=10)
+legend(-2.2,1.4,legend=levels(tax.Cd.d$Phylum),fill = pal)
+View(vertex_colour)
+
+cor_g <- graph_from_adjacency_matrix(cor_mat, mode='undirected', weighted = 'correlation')
+cor_edge_list <- as_data_frame(cor_g, 'edges')
+only_sig <- cor_edge_list[abs(cor_edge_list$correlation) > .75, ]
+new_g <- graph_from_data_frame(only_sig, F)
+
+ps.f.i.pr <- prune_taxa(taxa_sums(ps.f.i) > 100, ps.f.i)
+ps.f.i.pr.noCd <- prune_samples(sample_data(ps.f.i.pr)$Cd %in% c("neg"), ps.f.i.pr)
+ps.f.i.pr.noCd <- prune_taxa(taxa_sums(ps.f.i.pr.noCd) > 0, ps.f.i.pr.noCd) 
+ps.f.i.pr.Cd <- prune_samples(sample_data(ps.f.i.pr)$Cd %in% c("pos"), ps.f.i.pr)
+ps.f.i.pr.Cd <- prune_taxa(taxa_sums(ps.f.i.pr.Cd) > 0, ps.f.i.pr.Cd) 
+
+
+require(igraph)
+require(tibble)
+require(RColorBrewer)
+
+some_ps <- ps.f.i.pr.Cd
+cor.otus <- cor(ps.f.i.Cd.pr@otu_table@.Data, method = "spearman")
+
+tax.Cd.d <- as.data.frame(some_ps@tax_table@.Data)
+lev <- levels(tax.Cd.d$Family)
+len_lev <- length(lev)
+pal <- brewer.pal(len_lev,"Accent")
+vertex.col <- pal[tax.Cd.d$Family]
+
+cor.otu <- cor(some_ps@otu_table@.Data, method = "spearman")
+
+cor.otu[cor.otu < .75 ] <- 0
+diag(cor.otu) <- 0
+new_g <- graph.adjacency(cor.otu, mode='undirected', weighted = 'correlation')
+
+
+plot.igraph(new_g, edge.size=.8, vertex.color=vertex.col, vertex.size=12)
+legend(0.95,1.6,legend=levels(tax.Cd.d$Family),fill = pal, box.lty=0)
+
+ceb_Cd <- cluster_edge_betweenness(new_g) 
+ceb_noCd <- cluster_edge_betweenness(new_g) 
+p <- dendPlot(ceb_Cd, mode="phylo"  )
+?dendPlot
+
+
+permanova.454(ps.f.i.Cdt.wet, "unifrac")
+permanova.454(ps.f.i.Cdt.dr, "unifrac")
+permanova.454(ps.f.i.wt.wet, "unifrac")
+permanova.454(ps.f.i.wt.dr, "unifrac")
+
+Des.Tax = function(ps, Taxa){
+  require(DESeq2)
+  require(phyloseq)
+  require(microbiomeSeq)
+  ps <- taxa_level(ps, Taxa)
+  diagdds = phyloseq_to_deseq2(ps, ~ Cd)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  diagdds = DESeq(diagdds)
+  samp <-sample_data(ps)
+  dds.counts <- diagdds@assays@.xData$data$counts
+  dds.counts.df <- as.data.frame(dds.counts)
+  aggdata <- t(aggregate.data.frame(t(dds.counts.df), by=list(samp$Cd), median))
+  colnames(aggdata) <- aggdata[1,]
+  aggdata <- aggdata[-1,]
+  res = results(diagdds)
+  res.df <- as.data.frame(res)
+  nice <- cbind(res.df, as.data.frame(aggdata)[rownames(res.df),])
+  return(nice)
+}  
+des.all.family.Cd <- Des.Tax(ps.f.i, "Phylum")
+
+
+#create cor graph by qgraph
+require(viridis)
+require(qgraph)
+library(scales)
+some_ps <- ps.f.i.Cd.pr
+otus.pr.Cd <- some_ps@otu_table@.Data
+tax.Cd.d <- as.data.frame(some_ps@tax_table@.Data)
+lev <- levels(tax.Cd.d$Order)
+len_lev <- length(lev)
+pal <- hue_pal(h = c(0, 360), c = 100, l = 30, direction = -1)(len_lev)
+vertex.col <- pal[tax.Cd.d$Order]
+qgraph(cor(otus.pr.Cd), layout = "spring", minimum = "sig", alpha=0.05, groups = tax.Cd.d$Order,
+       sampleSize = 16, graph = "cor", threshold = "BH", vsize = 3, label.cex = 1.8)
+
+ps.f.i.pr.man <- prune_taxa(taxa_sums(ps.f.i) > 100, ps.f.i)
+
+library(vegan)
+some_ps <- ps.f.i.Cdt.wet
+otus.dt <- as.data.frame(some_ps@otu_table@.Data)
+mean(vegdist(otus.dt, method = "jaccard"))
+
+seq.list <- seq(0, 500, by=10)
+jac.steppo <- function(some_number){
+  some_ps <- prune_taxa(taxa_sums(some_ps) > some_number , some_ps) 
+  otus.dt <- as.data.frame(some_ps@otu_table@.Data)
+  jacco.mean <- mean(vegdist(otus.dt, method = "jaccard"))
+  return(jacco.mean)
+}
+
+some_ps <- ps.f.i
+seq.list <- seq(0, 600, by=1)
+jacco.list <- sapply(seq.list, jac.steppo)
+plot(jacco.list)
+
+prune_taxa(taxa_sums(some_ps) > 100 , some_ps)
+ps.f.i.100 <- prune_taxa(taxa_sums(ps.f.i) > 100 , ps.f.i)
+ps.f.i.noCd.100 <- prune_samples(sample_data(ps.f.i.100)$Cd %in% c("neg"), ps.f.i.100)
+ps.f.i.noCd.100 <- prune_taxa(taxa_sums(ps.f.i.noCd.100) > 0, ps.f.i.noCd.100) 
+ps.f.i.Cd.100 <- prune_samples(sample_data(ps.f.i.100)$Cd %in% c("pos"), ps.f.i.100)
+ps.f.i.Cd.100 <- prune_taxa(taxa_sums(ps.f.i.Cd.100) > 0, ps.f.i.Cd.100) 
+
+library(igraph)
+library(SpiecEasi)
+some_ps <- ps.f.i.Cd.100
+sparcc <- sparcc(some_ps@otu_table@.Data, iter = 100, inner_iter = 50, th = 0.1)
+
+head(des)
+
+amp_heatmap_grouped <- function(ps){
+  require(ampvis2)
+  require(phyloseq)
+  require(ggpubr)
+  
+  # split the original dataset into two then convert the goddamnned phyloseq object into ampvis2 asshanded class
+  ps.Cd <- prune_samples(sample_data(ps)$Drought %in% c("pos"), ps)
+  ps.Cd <- prune_taxa(taxa_sums(ps.Cd) > 0, ps.Cd)  
+  amp.Cd <- phyloseq_to_amp(ps.Cd)
+  
+  ps.wCd <- prune_samples(sample_data(ps)$Drought %in% c("neg"), ps)
+  ps.wCd <- prune_taxa(taxa_sums(ps.wCd) > 0, ps.wCd)  
+  amp.wCd <- phyloseq_to_amp(ps.wCd)
+  
+  # plot some ampvised heatmaps
+  p.heat.Cd <- amp_boxplot(amp.wCd,
+                           group_by = "Cd",
+                           tax_show = 8,
+                           tax_aggregate = "Phylum",
+                           tax_class = "Proteobacteria") + labs(title = "низкая влажность", color = "Cd") + theme_bw() + theme(text = element_text(size=14))
+  
+  p.heat.wCd <- amp_boxplot(amp.Cd,
+                            group_by = "Cd",
+                            tax_show = 8,
+                            tax_aggregate = "Phylum",
+                            tax_class = "Proteobacteria") + labs(title = "обычная влажность", color = "Cd") + theme_bw()  + theme(text = element_text(size=14))
+  
+  p <- ggarrange(p.heat.Cd, p.heat.wCd, ncol = 2 ,label.x = 0.105, nrow = 1, common.legend = TRUE)
+  return(p)
+}
+
+p1 <- amp_heatmap_grouped(ps.f.i.wt)
+p2 <- amp_heatmap_grouped(ps.f.i.Cdt)
+ggarrange(p1, p2, ncol = 1 , nrow = 2, label.y = 0.985, label.x = 0.35,  labels = c("SGE.wt","SGE.Cdt"), font.label = list(size = 14, face = "bold", color ="black"))                   

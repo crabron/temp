@@ -514,3 +514,51 @@ p1 <- ggcorrplot(dat, type = "lower", outline.col = "white", show.legend = FALSE
 resscss_back <- function(x)((0.651836*(10*x + 1)^(1/7))*100)
 p1$plot_env$label <- resscss_back(p1$plot_env$label)
 p1 + geom_text(aes(label = round(p1$plot_env$label, 1)))
+
+
+amp_heatmap_grouped <- function(ps){
+  require(ampvis2)
+  require(phyloseq)
+  require(ggpubr)
+  
+  # split the original dataset into two then convert the goddamnned phyloseq object into ampvis2 asshanded class
+  ps.Cd <- prune_samples(sample_data(ps)$Хуёписи %in% c("E3"), ps)
+  ps.Cd <- prune_taxa(taxa_sums(ps.Cd) > 0, ps.Cd)  
+  amp.Cd <- phyloseq_to_amp(ps.Cd)
+  
+  ps.wCd <- prune_samples(sample_data(ps)$Хуёписи %in% c("E5"), ps)
+  ps.wCd <- prune_taxa(taxa_sums(ps.wCd) > 0, ps.wCd)  
+  amp.wCd <- phyloseq_to_amp(ps.wCd)
+  
+  ps.wwCd <- prune_samples(sample_data(ps)$Хуёписи %in% c("B3"), ps)
+  ps.wwCd <- prune_taxa(taxa_sums(ps.wwCd) > 0, ps.wwCd)  
+  amp.wwCd <- phyloseq_to_amp(ps.wwCd)
+  
+  # plot some ampvised heatmaps
+  p.heat.Cd <- amp_boxplot(amp.wCd,
+                           group_by = "Подписи",
+                           tax_show = 8,
+                           tax_aggregate = "Phylum",
+                           tax_class = "Proteobacteria") + labs(title = "E3") + theme_bw() + theme(text = element_text(size=14))
+  
+  p.heat.wCd <- amp_boxplot(amp.Cd,
+                            group_by = "Подписи",
+                            tax_show = 8,
+                            tax_aggregate = "Phylum",
+                            tax_class = "Proteobacteria") + labs(title = "E5") + theme_bw()  + theme(text = element_text(size=14))
+  
+  p.heat.wwCd <- amp_boxplot(amp.wwCd,
+                            group_by = "Подписи",
+                            tax_show = 8,
+                            tax_aggregate = "Phylum",
+                            tax_class = "Proteobacteria") + labs(title = "B3") + theme_bw()  + theme(text = element_text(size=14))
+  
+  
+  p <- ggarrange(p.heat.Cd, p.heat.wCd,p.heat.wwCd, ncol = 3,label.x = 0.105, nrow = 1, common.legend = TRUE) + theme(legend.title = element_blank())
+  return(p)
+}
+
+p1 <- amp_heatmap_grouped(ps.f.nex)
+p2 <- amp_heatmap_grouped(ps.f.i.Cdt)
+ggarrange(p1, p2, ncol = 1 , nrow = 2, label.y = 0.985, label.x = 0.35,  labels = c("SGE.wt","SGE.Cdt"), font.label = list(size = 14, face = "bold", color ="black"))                   
+
