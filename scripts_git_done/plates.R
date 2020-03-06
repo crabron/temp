@@ -550,15 +550,15 @@ d.ex.78 <- d.all.tips %>% select(ex_pod, ex_black) %>% rename(дер.подзо�
 
 library(ggnewscale)
 p2 <- p1 + new_scale_fill()
-gheatmap(p2, df2, offset=15, width=.3,
+gheatmap(p2, df2, offset=15, width=.1,
          colnames_angle=90, colnames_offset_y = .25) +
   scale_fill_viridis_c(option="A", name="continuous\nvalue")
 
 
 
-p2 <- gheatmap(p, d.cdna.78, offset=1, width=0.6, legend_title = "кДНК") 
+p2 <- gheatmap(p, d.cdna.78, offset=1.3, width=0.55, legend_title = "кДНК") 
 p3 <- p2 + new_scale_fill()
-p3 <- gheatmap(p2, d.ex.78, offset=1.8, width=0.6, legend_title = "экстрДНК") + scale_colour_gradientn(colours = c("blue", "white", "red"),na.value = "grey50", guide = "colourbar",aesthetics = "fill")
+p3 <- gheatmap(p2, d.ex.78, offset=2.3, width=0.55, legend_title = "экстрДНК") + scale_colour_gradientn(colours = c("blue", "white", "red"),na.value = "grey50", guide = "colourbar",aesthetics = "fill")
 p3
 
 # add base mean
@@ -579,7 +579,7 @@ varstab <- function(ps){
 
 ps.s.nosilt.pod.varstab <- varstab(ps.s.nosilt.pod)
 ps.s.nosilt.black.varstab <- varstab(ps.s.nosilt.black)
-
+ps.s.nosilt.varstab <- varstab(ps.s.nosilt)
 
 
 
@@ -598,15 +598,105 @@ as_tibble(t(ps.s.nosilt.pod.varstab@otu_table@.Data), rownames = "id" ) %>%
   rowwise() %>% 
   mutate(res=mean(c(.))) %>% 
   pull(res)
+as_tibble(t(ps.s.nosilt.pod.varstab@otu_table@.Data), rownames = "id" )
+
+#same for relative abundance
+otus.pod.rel <- t(apply(otu_table(ps.s.nosilt.pod), 1, function(x) x / sum(x)))
+otus.black.rel <- t(apply(otu_table(ps.s.nosilt.black), 1, function(x) x / sum(x)))
+
+as_tibble(t(otus.pod.rel ), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.pod
+as_tibble(t(otus.pod.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(podMean=rowMeans(.)) %>% 
+  select(podMean) -> res.pod
+res.podMean.rel <- cbind2(id.pod,res.pod)
+# for black
+as_tibble(t(otus.black.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.black
+as_tibble(t(otus.black.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(blackMean=rowMeans(.)) %>% 
+  select(blackMean) -> res.black
+res.blackMean.rel <- cbind2(id.black,res.black)
+
+res.blackMean.rel
+res.podMean.rel
+all.resMean.rel <- full_join(res.podMean.rel, res.blackMean.rel)
+all.resMean.rel %>% replace(is.na(.), 0) -> all.resMean.rel
+all.resMean.rel$blackMean <- 0 - all.resMean.rel$blackMean
+
+first.tree <- phyloseq@phy_tree
+ids.tree <-  data.frame(id = first.tree$tip.label, id.taxa = tree$tip.label)
+all.resMean.rel.melted
+some.join <- full_join(ids.tree, all.resMean.rel.melted)
+some.join <- subset(some.join, select = -c(id))
+some.join
+library(reshape2)
+library(ggstance)
+all.resMean.rel.melted <- melt(all.resMean.rel, id=c("id"))
+
+some.join$value <- some.join$value*100
+as.tibble(some.join)
+p4 <- facet_plot(p3, panel = "дерново-подзолистая / чернозём", data = some.join,  geom = geom_barh, 
+                 mapping = aes(value), color = "salmon", fill = "white",
+                 stat='identity') 
+all.resMean.rel.melted
+
+library(gtable)
+library(grid)
+gt = ggplot_gtable(ggplot_build(p4))
+gtable_show_layout(gt) # will show you the layout - very handy function
+gt # see plot layout in table format
+gt$layout$l[grep('panel-2', gt$layout$name)] # you want to find the column specific to panel-2
+gt$widths[7] = 0.5*gt$widths[7] # in this case it was colmun 7 - reduce the width by a half
+grid.draw(gt) # plot with grid draw
+
+
+p3
+p4
+
 
 # selfmade varstab function - rowMean - not the optymal tidy solution
+# for pod
+as_tibble(t(ps.s.nosilt.pod.varstab@otu_table@.Data), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.pod
 as_tibble(t(ps.s.nosilt.pod.varstab@otu_table@.Data), rownames = "id" ) %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>%
   select_if(is.numeric) %>% 
   replace(is.na(.), 0) %>% 
-  mutate(res=rowMeans(.)) %>% pull(res)
+  mutate(podMean=rowMeans(.)) %>% 
+  select(podMean) -> res.pod
+res.podMean <- cbind2(id.pod,res.pod)
+# for black
+as_tibble(t(ps.s.nosilt.black.varstab@otu_table@.Data), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.black
+as_tibble(t(ps.s.nosilt.black.varstab@otu_table@.Data), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(blackMean=rowMeans(.)) %>% 
+  select(blackMean) -> res.black
+res.blackMean <- cbind2(id.black,res.black)
+
+res.blackMean
+res.podMean
+all.resMean <- full_join(res.podMean, res.blackMean)
+all.resMean
+
+p3
 
 
+as_tibble(t(ps.s.nosilt.pod.varstab@otu_table@.Data), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>% pull(id) %>% length()
 
 
 
@@ -637,8 +727,9 @@ p4 <- facet_plot(p3, panel = '', data = d.cdna, geom = geom_barh,
 
 library(DivNet)
 divnet.res <-  divnet(ps.s.nosilt.pod, ncores = 30)
+divnet.res
 
-
+# not working at all
 
 rownames(t.all.tips) <- tree$tip.label
 tree$tip.label
