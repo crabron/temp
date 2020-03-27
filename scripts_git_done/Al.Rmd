@@ -1,0 +1,65 @@
+---
+title: "belimov Al"
+author: "GrGladkov"
+date: "06 03 2020"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Import phyloseq object
+rds format
+
+```{r, message=FALSE, echo=TRUE}
+library(phyloseq)
+library(tidyverse)
+ps <- readRDS(file = "~/storage/al_R/rf/ps.f.dec.rds")
+```
+
+### nice rownames 
+```{r}
+
+```
+
+```{r, message=FALSE,echo=TRUE, fig.height=10, fig.width=14}
+plot_rich_reads_samlenames_lm <- function(ps.f){
+  rish <- estimate_richness(ps.f, measures = "Observed")
+  reads.sum <- as.data.frame(sample_sums(ps.f))
+  reads.summary <- cbind(rish, reads.sum)
+  colnames(reads.summary) <- c("otus","reads")
+  reads.summary["Description"] <- rownames(ps.f@sam_data)
+  reads.summary["Repeats"] <- ps.f@sam_data$Description
+  reads.summary["Plant"] <- ps.f@sam_data$Plant
+  library(ggrepel)
+  require(ggforce)
+  p1 <- ggplot(data=reads.summary) + geom_point(aes(y=otus, x=log2(reads), color=Repeats),size=3) + geom_text_repel(aes(y=otus, x=log2(reads), label=Repeats)) + theme_bw()+
+    geom_smooth(aes(y=otus, x=log2(reads), fill=Repeats, color=Repeats),method=lm, se=FALSE, ymin = 1) + scale_x_continuous(sec.axis = sec_axis(sec.axis ~ 2**.)) 
+  # geom_mark_ellipse(aes(y = otus, x=reads, group = Repeats, label = Repeats, color = Repeats), label.fontsize = 10, label.buffer = unit(2, "mm"), label.minwidth = unit(5, "mm"),con.cap = unit(0.1, "mm"))
+  
+  return(p1)
+}
+
+plot_rich_reads_samlenames_lm(ps)
+```
+```{r}
+permanova.forloop <- function(factor){
+  require(vegan)
+  require(phyloseq)
+  dist <- phyloseq::distance(physeq, "bray")
+  metadata <- as(sample_data(physeq@sam_data), "data.frame")
+  ad <- adonis2(as.formula(paste( "dist ~", "Plant/", factor)), data = metadata)
+  ad <- cbind2(ad[2,][3], ad[2,][5])
+  return(ad)
+}
+physeq <- ps
+permanova.forloop.pos <- possibly(permanova.forloop, otherwise = NA)
+out <- map(colnames(physeq@sam_data), permanova.forloop.pos)
+out.d <- do.call("rbind", out)
+View(out.d)
+physeq@sam_data["43"]
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
