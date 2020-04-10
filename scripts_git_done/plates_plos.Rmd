@@ -30,7 +30,7 @@ saveRDS(ps.f.plos, file = "~/storage/plates/ps.f.plos.rds")
 setwd("~/storage/plates/plos/")
 library(phyloseq)
 ps <- readRDS(file = "~/storage/plates/ps.f.plos.rds")
-ps@sam_data
+ps
 ```
 
 ###Richness/depth correlation. Outliers - sample 81.
@@ -71,6 +71,9 @@ ps.f <- ps
 ###Split dataset by medium/soil
 
 ```{r, message=FALSE}
+
+ps.f <- ps
+
 ps.medium <- prune_samples(sample_data(ps.f)$Medium_or_Soil %in% c("medium"),ps.f)
 ps.medium  <- prune_taxa(taxa_sums(ps.medium ) > 0, ps.medium )
 
@@ -366,26 +369,45 @@ plot(jacco.list)
 
 
 ###UNIFRAC visualisation with step by step tree glom. Rarefaction.
+####[draft]
 
-```{r, fig.height=8, fig.width=12}
+```{r, fig.height=8, fig.width=12, eval=FALSE}
 
 ps.soil@sam_data
 seq.list <- seq(0, 0.8, by=0.005)
 library(phyloseq)
 library(future.apply)
-uni.steppo.soil <- function(some_number){
+
+uni.steppo.mean.soil <- function(some_number){
   ps.soil <- tip_glom(ps.soil, some_number) 
   jacco.mean <- mean(phyloseq::distance(ps.soil, method = "unifrac", type = "samples"))
   return(jacco.mean)
 }
 
-plan(multiprocess, workers = 20)
-
-uni.steppo.medium <- function(some_number){
+uni.steppo.mean.medium <- function(some_number){
   ps.medium <- tip_glom(ps.medium, some_number) 
   jacco.mean <- mean(phyloseq::distance(ps.medium, method = "unifrac", type = "samples"))
   return(jacco.mean)
 }
+
+uni.steppo.centroid.medium <- function(some_number){
+  dist <- phyloseq::distance(ps.soil.rand, method = "unifrac", type = "samples")
+  names.sp <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "sod-podzolic") %>% rownames()
+  names.cz <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "black soil") %>% rownames()
+  jacco.mean <- usedist::dist_between_centroids(dist, names.sp, names.cz, squared = TRUE)
+  return(jacco.mean)
+}
+
+uni.steppo.centroid.medium <- function(some_number){
+  dist <- phyloseq::distance(ps.soil.rand, method = "unifrac", type = "samples")
+  names.sp <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "sod-podzolic") %>% rownames()
+  names.cz <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "black soil") %>% rownames()
+  jacco.mean <- usedist::dist_between_centroids(dist, names.sp, names.cz, squared = TRUE)
+  return(jacco.mean)
+}
+
+
+plan(multiprocess, workers = 20)
 
 phyloseq::distance(ps.soil, method = "unifrac", type = "samples")
 
@@ -405,7 +427,7 @@ p1
 
 dis.medium <- phyloseq::distance(ps.medium, method = "unifrac", type = "samples")
 dis.medium
-mod <- betadisper(dis, )
+
 
 veganifyOTU <- function(physeq){
   require(phyloseq)
@@ -421,7 +443,7 @@ groups.soil <- ps.soil@sam_data$Soil
 
 plan(multiprocess, workers = 20)
 
-uni.steppo.betadisp.soil <- function(some_number){
+uni.steppo.betadisp.soil <- function(some_number, ps){
   ps.soil <- tip_glom(ps.soil, some_number) 
   dist <- phyloseq::distance(ps.soil, method = "unifrac", type = "samples")
   groups <- ps.soil@sam_data$Soil
@@ -435,26 +457,117 @@ uni.steppo.medium <- function(some_number){
   return(jacco.mean)
 }
 
+?usedist::dist_between_centroids
 future:::ClusterRegistry("stop")
 
 ps.soil.rand <- rarefy_even_depth(ps.soil, rngseed = 7788)
-dist <- phyloseq::distance(ps.soil.rand, method = "unifrac", type = "samples")
-metadata <- as(sample_data(ps.soil.rand), "data.frame")
-ad <- adonis2(dist ~ Soil, data = metadata)
-ad
-?usedist::dist_between_centroids
 
+dist <- phyloseq::distance(ps.soil.rand, method = "unifrac", type = "samples")
+names.sp <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "sod-podzolic") %>% rownames()
+names.cz <- subset(ps.soil.rand@sam_data, ps.soil.rand@sam_data$Soil %in% "black soil") %>% rownames()
+usedist::dist_between_centroids(dist, names.sp, names.cz, squared = TRUE)
+
+groups <- ps.soil@sam_data$Soil
+mod <- vegan::betadisper(dist, groups)
+mod.box <- boxplot(mod)
+
+mod
+
+mod.box$stats
+?boxplot
 TukeyHSD(mod, which = "group", ordered = FALSE, conf.level = 0.95)
 scores(mod, display = c("sites", "centroids"), choices = c(1,2))
-View(mod)
-anova(mod)
-View(varespec)
-plot(mod)
-boxplot(ad)
-box$stats
-box$conf
+
 
 ?adonis2
+```
+####clean copy
+```{r, fig.height=8, fig.width=12}
+
+library(future)
+library(future.apply)
+
+plan(multiprocess, workers = 20)
+seq.list <- seq(0, 0.6, by=0.005)
+# seq.list <- seq(0, 0.6, by=0.1)
+
+steppo.mean <- function(physeq, seq.list, rar = FALSE){
+  
+  message("steppo.mean run")
+  
+  if (rar) {
+    physeq <- rarefy_even_depth(physeq,  rngseed = 7788, verbose = FALSE)
+  } else {
+    physeq <- physeq
+  }
+  
+  uni.steppo.mean <- function(some_number){
+    physeq.glom <- tip_glom(physeq, some_number) 
+    jacco.mean <- mean(phyloseq::distance(physeq.glom, method = "unifrac", type = "samples"))
+    return(jacco.mean)
+  }
+  
+  uni.list <- future_sapply(seq.list, uni.steppo.mean)
+  df <-as.data.frame(cbind(seq.list, uni.list), row.names = seq.list)
+  message("OUT:")
+  print.data.frame(df)
+  return(df)
+}
+
+steppo.centroids <- function(physeq, seq.list, rar = FALSE){
+  
+  message("steppo.centroids run")
+  if (rar) {
+    physeq <- rarefy_even_depth(physeq,  rngseed = 7788, verbose = FALSE)
+  } else {
+    physeq <- physeq
+  }
+  
+  uni.steppo.centroid <- function(some_number){
+    ps.glommed <- tip_glom(physeq, some_number)
+    dist <- phyloseq::distance(ps.glommed, method = "unifrac", type = "samples")
+    names.sp <- subset(physeq@sam_data, physeq@sam_data$Soil %in% "sod-podzolic") %>% rownames()
+    names.cz <- subset(physeq@sam_data, physeq@sam_data$Soil %in% "black soil") %>% rownames()
+    jacco.mean <- usedist::dist_between_centroids(dist, names.sp, names.cz, squared = TRUE)
+    return(jacco.mean)
+  }
+
+  uni.list <- future_sapply(seq.list, uni.steppo.centroid)
+  df <-as.data.frame(cbind(seq.list, uni.list), row.names = seq.list)
+  message("OUT:")
+  print.data.frame(df)
+  return(df)
+}
+
+
+
+steppo.plot <- function(ps.soil, ps.medium, steppo, seq.list, rar = FALSE){
+  df.soil <- steppo(ps.soil, seq.list, rar)
+  df.medium <- steppo(ps.medium, seq.list, rar)
+  df <- merge(df.soil, df.medium, by="seq.list")
+  colnames(df) <- c("seq.list", "soil", "medium")
+  df.melted <- reshape2::melt(df, id=c("seq.list"))
+  require(ggplot2)
+  print.data.frame(df.melted)
+  p <- ggplot(data=df.melted) + geom_point(aes(y=value, x=seq.list, color=variable),size=3) + theme_bw() 
+  return(p)
+}
+
+p.mean.norar <- steppo.plot(ps.soil, ps.medium, steppo.mean , seq.list, rar = FALSE)
+p.mean.rar <- steppo.plot(ps.soil, ps.medium, steppo.mean , seq.list, rar = TRUE)
+p.centroid.norar <- steppo.plot(ps.soil, ps.medium, steppo.centroids , seq.list, rar = FALSE)
+p.centroid.rar <- steppo.plot(ps.soil, ps.medium, steppo.centroids , seq.list, rar = TRUE)
+
+p.mean.norar
+p.mean.rar
+
+library(ggpubr)
+p <- ggarrange( p.mean.norar, p.mean.rar, p.centroid.norar, p.centroid.rar, nrow = 2, ncol = 2,
+                labels=c("mean_rarefied", "mean_w_rarefaction", "centroids_rarefied", "centroids_w_rarefaction"), common.legend = TRUE)
+
+p
+
+future:::ClusterRegistry("stop")
 ```
 
 ### REWRITE! Not have enough time.  
