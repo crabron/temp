@@ -29,7 +29,7 @@ saveRDS(ps.f.plos, file = "~/storage/plates/ps.f.plos.rds")
 ```{r, message=FALSE}
 setwd("~/storage/plates/plos/")
 library(phyloseq)
-ps <- readRDS(file = "~/storage/plates/ps.f.plos.rds")
+ps <- readRDS(file = "~/storage/plates/ps.f.plos.rds") 
 ps
 ```
 
@@ -88,6 +88,9 @@ ps.cz  <- prune_taxa(taxa_sums(ps.cz ) > 0, ps.cz )
 
 ps.sp <- prune_samples(sample_data(ps.f)$Soil %in% c("sod-podzolic"), ps.f)
 ps.sp <- prune_taxa(taxa_sums(ps.sp) > 0, ps.sp)
+
+
+
 
 ```
 
@@ -564,10 +567,246 @@ p.mean.rar
 library(ggpubr)
 p <- ggarrange( p.mean.norar, p.mean.rar, p.centroid.norar, p.centroid.rar, nrow = 2, ncol = 2,
                 labels=c("mean_rarefied", "mean_w_rarefaction", "centroids_rarefied", "centroids_w_rarefaction"), common.legend = TRUE)
-
+glom_1_p <- p
 p
 
 future:::ClusterRegistry("stop")
+```
+
+#### Plot chunk
+```{r, , fig.height=8, fig.width=12}
+glom_1_p
+
+```
+####How many ASVs with different height of tree cut
+```{r, , fig.height=8, fig.width=12, eval=FALSE}
+
+taxa_counter_after_glom <- function(physeq, from, till){
+  
+}
+
+
+
+ps.soil.1 <-  tip_glom(ps.soil, h=0.1)
+ps.soil.2 <-  tip_glom(ps.soil, h=0.2)
+ps.soil.4 <-  tip_glom(ps.soil, h=0.3)
+ps.soil.4 <-  tip_glom(ps.soil, h=0.4)
+
+```
+
+####Function from Jacob @cramjaco Cram, G-d bless you
+add sublevel taxonomy with garbaged tip-glommed ASVs
+https://github.com/joey711/phyloseq/issues/866
+
+```{r}
+
+tip_glom_saveid <- function(physeq, h = 0.2, hcfun = agnes, ...){
+
+  
+hcfun = agnes
+h=0.2
+
+## Necessary libraries
+require(phyloseq)
+require(ape)
+require(cluster)
+require(dplyr)
+require(tibble)
+
+## Original phyloseq object
+physeq0 <- ps.medium
+
+## From phyloseq::tip_glom
+dd = as.dist(cophenetic.phylo(phy_tree(physeq)))
+psclust = cutree(as.hclust(hcfun(dd)), h = h)
+## Key showing which OTUs are in which groups
+taxGlomKey <- data.frame(key = psclust) %>% rownames_to_column
+
+## Key comparing new otus to old otus
+nGrp = max(taxGlomKey$key) 
+
+grps = vector("list", nGrp)
+
+for (loc_key in 1:nGrp){
+      grps[[loc_key]] = taxGlomKey %>% filter(key == loc_key) %>% pull(rowname)
+}
+
+## Turn list of lists into list of concatenated strings.
+oldGroups <- sapply(grps,
+                    function(x){
+                    unlist(
+                        paste(x, collapse = ', ')
+                    )
+}
+)
+oldGroups
+
+## From phyloseq::tip_glom - do the actual merging
+cliques = levels(factor(psclust))[tapply(psclust, factor(psclust), 
+                                         function(x) {
+                                         length(x) > 1
+})]
+for (i in cliques) {
+physeq = merge_taxa(physeq, eqtaxa = names(psclust)[psclust == 
+                                                    i])
+}
+
+physeq
+}
+
+attributes(physeq)
+oldGroups
+ps.soil.glommed <- tip_glom(ps.soil, h=0.7)
+ps.soil.amazing.glommed <- tip_glom_saveid(ps.soil, h=0.7)
+ps.soil
+ps.soil.glommed
+ps.soil.amazing.glommed
+ps.soil.glommed@tax_table
+ps.soil.amazing.glommed@tax_table
+```
+
+####The uncore otus by tree reduction
+```{r}
+# tip_glom_saveid <- function(physeq, h = 0.2, hcfun = agnes, ...){
+hcfun = agnes
+h=0.2
+
+require(phyloseq)
+require(ape)
+require(cluster)
+require(dplyr)
+require(tibble)
+
+
+physeq <- NULL
+
+return_elders <- function(physeq, h){
+  ## From phyloseq::tip_glom
+  dd = as.dist(cophenetic.phylo(phy_tree(physeq)))
+  psclust = cutree(as.hclust(hcfun(dd)), h = h)
+  ## Key showing which OTUs are in which groups
+  taxGlomKey <- data.frame(key = psclust) %>% rownames_to_column
+  
+  ## Key comparing new otus to old otus
+  nGrp = max(taxGlomKey$key) 
+  
+  grps = vector("list", nGrp)
+  
+  for (loc_key in 1:nGrp){
+        grps[[loc_key]] = taxGlomKey %>% filter(key == loc_key) %>% pull(rowname)
+  }
+return(grps)
+}
+psclust
+stringr::str_subset(psclust, stringr::coll("1", ignore_case = TRUE))
+taxGlomKey
+grps
+as_tibble(psclust,  rownames = "id")
+
+oldMedium <- return_elders(ps.medium, 0.1)
+oldSoil <- return_elders(ps.soil, 0.1)
+
+ps.medium.glommed.1 <- tip_glom(ps.medium, h=0.1)
+oldMedium
+oldSoil
+unlist(oldMedium)[1]
+taxa_names(ps.medium.glommed.1)
+
+oldSoil
+map.result <- purrr::map(oldSoil, function(x) any(unlist(oldMedium) %in% x))
+(sum(unlist(map.result)) / length(unlist(map.result)))*100
+
+
+```
+
+```{r}
+
+library(future)
+library(future.apply)
+require(phyloseq)
+require(ape)
+require(cluster)
+require(dplyr)
+require(tibble)
+
+plan(multiprocess, workers = 20)
+seq.list <- seq(0, 0.6, by=0.005)
+#seq.list <- seq(0, 0.6, by=0.1)
+
+return_elders <- function(physeq, h){
+  ## From phyloseq::tip_glom
+  dd = as.dist(cophenetic.phylo(phy_tree(physeq)))
+  psclust = cutree(as.hclust(hcfun(dd)), h = h)
+  ## Key showing which OTUs are in which groups
+  taxGlomKey <- data.frame(key = psclust) %>% rownames_to_column
+  
+  ## Key comparing new otus to old otus
+  nGrp = max(taxGlomKey$key) 
+  
+  grps = vector("list", nGrp)
+  
+  for (loc_key in 1:nGrp){
+        grps[[loc_key]] = taxGlomKey %>% filter(key == loc_key) %>% pull(rowname)
+  }
+  
+return(grps)
+}
+
+
+main_diff <- function(h, physeq){
+  
+physeq.cz <- prune_samples(sample_data(physeq)$Soil %in% c("black soil"), physeq)
+physeq.cz  <- prune_taxa(taxa_sums(physeq.cz ) > 0, physeq.cz )
+
+physeq.sp <- prune_samples(sample_data(physeq)$Soil %in% c("sod-podzolic"), physeq)
+physeq.sp <- prune_taxa(taxa_sums(physeq.sp) > 0, physeq.sp)
+
+oldCz <- return_elders(physeq.cz, h)
+oldSp <- return_elders(physeq.sp, h)
+map.result <- purrr::map(oldSp, function(x) any(unlist(oldCz) %in% x))
+diff.soils <- (sum(unlist(map.result)) / length(unlist(map.result)))*100
+# message(paste0("cz - ", length(oldCz), ", sp - ", length(oldSp), " ==> ", diff.soils))
+return(diff.soils)
+}
+
+
+
+main_diff_soil <- function(h){
+  out.soil <- main_diff(h, ps.soil)
+  return(out.soil)
+}
+  
+  
+main_diff_medium <- function(h){
+  out.medium <- main_diff(h, ps.medium)
+  return(out.medium)  
+}
+
+uni.list.soil <- future_sapply(seq.list, main_diff_soil)
+df.soil <-as.data.frame(cbind(seq.list, uni.list.soil), row.names = seq.list)
+
+uni.list.medium <- future_sapply(seq.list, main_diff_medium)
+df.medium <-as.data.frame(cbind(seq.list, uni.list.medium), row.names = seq.list)
+
+
+df <- merge(df.soil, df.medium, by="seq.list")
+colnames(df) <- c("seq.list", "soil", "medium")
+df.melted <- reshape2::melt(df, id=c("seq.list"))
+require(ggplot2)
+print.data.frame(df.melted)
+p.diff <- ggplot(data=df.melted) + geom_point(aes(y=value, x=seq.list, color=variable),size=3) + theme_bw() 
+p.diff
+df.melted
+class(p.diff)
+
+write.table(df.melted, file = "~/storage/plates/art/df.melted.diff.tsv", sep= "\t", col.names = NA, quote=FALSE)
+
+future:::ClusterRegistry("stop")
+```
+
+```{r, fig.height=8, fig.width=12}
+p.diff
+dev.off()
 ```
 
 ### REWRITE! Not have enough time.  
