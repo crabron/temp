@@ -24,6 +24,9 @@ ps <- readRDS(file = "~/storage/al_R/rf/ps.f.dec.rds")
 
 ```
 
+###Alpha richess
+1903 без In - неадекватная кривая разрежения
+Удалить 
 ```{r, message=FALSE,echo=TRUE, fig.height=10, fig.width=14}
 plot_rich_reads_samlenames_lm <- function(ps.f){
   rish <- estimate_richness(ps.f, measures = "Observed")
@@ -44,7 +47,59 @@ plot_rich_reads_samlenames_lm <- function(ps.f){
 
 plot_rich_reads_samlenames_lm(ps)
 ```
+###Split
 ```{r}
+ps.f.s1903 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s1903"), ps.f.ch)
+ps.f.s1903 <- prune_taxa(taxa_sums(ps.f.s1903) > 0,ps.f.s1903)
+
+ps.f.s7307 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s7307"), ps.f.ch)
+ps.f.s7307 <- prune_taxa(taxa_sums(ps.f.s7307) > 0,ps.f.s7307)
+
+ps.f.s8473 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s8473"), ps.f.ch)
+ps.f.s8473 <- prune_taxa(taxa_sums(ps.f.s8473) > 0,ps.f.s8473)
+
+ps.f.s8353 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s8353"), ps.f.ch)
+ps.f.s8353 <- prune_taxa(taxa_sums(ps.f.s8353) > 0,ps.f.s8353)
+
+physeq <- ps.f.s1903
+physeq@sam_data$Al
+
+physeq.Al.pos <- prune_samples(sample_data(physeq)$Al %in% c("pos"), physeq)
+physeq.Al.pos <- prune_taxa(taxa_sums(physeq.Al.pos) > 0, physeq.Al.pos)
+
+physeq.Al.neg <- prune_samples(sample_data(physeq)$Al %in% c("neg"),physeq)
+physeq.Al.neg <- prune_taxa(taxa_sums(physeq.Al.neg) > 0, physeq.Al.neg)
+
+physeq.In.pos <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
+physeq.In.pos <- prune_taxa(taxa_sums(physeq.In.pos) > 0,physeq.In.pos)
+
+physeq.In.neg <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
+physeq.In.neg <- prune_taxa(taxa_sums(physeq.In.neg) > 0,physeq.In.neg)
+```
+###Beta
+
+###PERMANOVA All
+```{r, echo=FALSE, rows.print = 112}
+permanova.forloop <- function(factor){
+  require(vegan)
+  require(phyloseq)
+  dist <- phyloseq::distance(physeq, "bray")
+  metadata <- as(sample_data(physeq@sam_data), "data.frame")
+  ad <- adonis2(as.formula(paste( "dist ~", factor)), data = metadata)
+  ad <- cbind2(ad[2,][3], ad[2,][5])
+  return(ad)
+}
+physeq <- ps
+permanova.forloop.pos <- possibly(permanova.forloop, otherwise = NA)
+out <- map(colnames(physeq@sam_data), permanova.forloop.pos)
+out.d <- do.call("rbind", out)
+out.d[order(out.d$`Pr(>F)`),]
+
+
+```
+
+###PERMANOVA Plant
+```{r, echo=FALSE, rows.print = 112}
 permanova.forloop <- function(factor){
   require(vegan)
   require(phyloseq)
@@ -58,8 +113,9 @@ physeq <- ps
 permanova.forloop.pos <- possibly(permanova.forloop, otherwise = NA)
 out <- map(colnames(physeq@sam_data), permanova.forloop.pos)
 out.d <- do.call("rbind", out)
-View(out.d)
-physeq@sam_data["43"]
+out.d[order(out.d$`Pr(>F)`),]
+
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

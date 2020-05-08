@@ -666,7 +666,7 @@ ps.soil.amazing.glommed@tax_table
 ```
 
 ####The uncore otus by tree reduction
-```{r}
+```{r, message=FALSE}
 # tip_glom_saveid <- function(physeq, h = 0.2, hcfun = agnes, ...){
 hcfun = agnes
 h=0.2
@@ -706,19 +706,24 @@ as_tibble(psclust,  rownames = "id")
 oldMedium <- return_elders(ps.medium, 0.1)
 oldSoil <- return_elders(ps.soil, 0.1)
 
-ps.medium.glommed.1 <- tip_glom(ps.medium, h=0.1)
+ps.medium.glommed.4 <- tip_glom(ps.medium, h=0.4)
+ps.soil.glommed.4 <- tip_glom(ps.soil, h=0.4)
 oldMedium
 oldSoil
 unlist(oldMedium)[1]
 taxa_names(ps.medium.glommed.1)
 
-oldSoil
+length(oldSp)
+
+
 map.result <- purrr::map(oldSoil, function(x) any(unlist(oldMedium) %in% x))
 (sum(unlist(map.result)) / length(unlist(map.result)))*100
 
 
 ```
 
+####Creal functions. Problem with alhorithm theory.
+Plot - percent of same group on same taxonomic level(throught cophenetic phylo by ape) beetween CZ and PD in bulk soil and medium.
 ```{r}
 
 library(future)
@@ -728,6 +733,8 @@ require(ape)
 require(cluster)
 require(dplyr)
 require(tibble)
+
+hcfun = agnes
 
 plan(multiprocess, workers = 20)
 seq.list <- seq(0, 0.6, by=0.005)
@@ -797,16 +804,197 @@ print.data.frame(df.melted)
 p.diff <- ggplot(data=df.melted) + geom_point(aes(y=value, x=seq.list, color=variable),size=3) + theme_bw() 
 p.diff
 df.melted
-class(p.diff)
 
 write.table(df.melted, file = "~/storage/plates/art/df.melted.diff.tsv", sep= "\t", col.names = NA, quote=FALSE)
 
 future:::ClusterRegistry("stop")
+
+````
+
+
+````{r}
+h = 0.4
+physeq = ps.medium
+
+physeq.cz <- prune_samples(sample_data(physeq)$Soil %in% c("black soil"), physeq)
+physeq.cz  <- prune_taxa(taxa_sums(physeq.cz ) > 0, physeq.cz )
+
+physeq.sp <- prune_samples(sample_data(physeq)$Soil %in% c("sod-podzolic"), physeq)
+physeq.sp <- prune_taxa(taxa_sums(physeq.sp) > 0, physeq.sp)
+
+oldCz <- return_elders(physeq.cz, h)
+oldSp <- return_elders(physeq.sp, h)
+map.result <- purrr::map(oldSp, function(x) any(unlist(oldCz) %in% x))
+diff.soils <- (sum(unlist(map.result)) / length(unlist(map.result)))*100
+# message(paste0("cz - ", length(oldCz), ", sp - ", length(oldSp), " ==> ", diff.soils)
+
+diff.soils
+
+oldCz
+length(oldSp)
+
+any(("Seq792") %in% unlist(oldCz))
+
+oldSp
+
+ tip.list <- purrr::map(taxa.pruned$number, function(x) paste0("Seq", x))
+# test <- purrr::map(tip.list, function(x) any(x %in% unlist(oldSp)))
+"Seq3244" %in% tip.list
+# sum(unlist(test)) 
+# length(test)
+
+cat(x)
+
+map.result
+
+taxa.pruned
+
+h
+
+length(return_elders(physeq.sp, h))
+
+replicate(100, main_diff(0.4, ps.medium))
+ps.medium
+main_diff(0.4, ps.medium)
+````
+####Same shit, diff core math algorithm
+```{r, message=FALSE}
+
+library(future)
+library(future.apply)
+require(phyloseq)
+require(ape)
+require(cluster)
+require(dplyr)
+require(tibble)
+
+hcfun = agnes
+
+plan(multiprocess, workers = 20)
+seq.list <- seq(0, 0.6, by=0.005)
+#seq.list <- seq(0, 0.6, by=0.1)
+
+return_elders <- function(physeq, h){
+  ## From phyloseq::tip_glom
+  dd = as.dist(cophenetic.phylo(phy_tree(physeq)))
+  psclust = cutree(as.hclust(hcfun(dd)), h = h)
+  ## Key showing which OTUs are in which groups
+  taxGlomKey <- data.frame(key = psclust) %>% rownames_to_column
+  
+  ## Key comparing new otus to old otus
+  nGrp = max(taxGlomKey$key) 
+  
+  grps = vector("list", nGrp)
+  
+  for (loc_key in 1:nGrp){
+        grps[[loc_key]] = taxGlomKey %>% filter(key == loc_key) %>% pull(rowname)
+  }
+  
+return(grps)
+}
+
+
+main_diff <- function(h, physeq){
+  
+physeq.cz <- prune_samples(sample_data(physeq)$Soil %in% c("black soil"), physeq)
+physeq.cz  <- prune_taxa(taxa_sums(physeq.cz ) > 0, physeq.cz )
+
+physeq.sp <- prune_samples(sample_data(physeq)$Soil %in% c("sod-podzolic"), physeq)
+physeq.sp <- prune_taxa(taxa_sums(physeq.sp) > 0, physeq.sp)
+
+oldCz <- return_elders(physeq.cz, h)
+oldSp <- return_elders(physeq.sp, h)
+map.result.left <- purrr::map(oldSp, function(x) any(unlist(oldCz) %in% x))
+map.result.right <- purrr::map(oldCz, function(x) any(unlist(oldSp) %in% x))
+
+diff.soils.right <- (sum(unlist(map.result.right)) / length(unlist(map.result.right)))*100
+diff.soils.left <- (sum(unlist(map.result.left)) / length(unlist(map.result.left)))*100
+diff.soils <- mean(c(diff.soils.left, diff.soils.right))
+# message(paste0("cz - ", length(oldCz), ", sp - ", length(oldSp), " ==> ", diff.soils))
+return(diff.soils)
+}
+
+
+
+main_diff_soil <- function(h){
+  out.soil <- main_diff(h, ps.soil)
+  return(out.soil)
+}
+  
+  
+main_diff_medium <- function(h){
+  out.medium <- main_diff(h, ps.medium)
+  return(out.medium)  
+}
+
+uni.list.soil <- future_sapply(seq.list, main_diff_soil)
+df.soil <-as.data.frame(cbind(seq.list, uni.list.soil), row.names = seq.list)
+
+uni.list.medium <- future_sapply(seq.list, main_diff_medium)
+df.medium <-as.data.frame(cbind(seq.list, uni.list.medium), row.names = seq.list)
+
+
+df <- merge(df.soil, df.medium, by="seq.list")
+colnames(df) <- c("seq.list", "soil", "medium")
+df.melted <- reshape2::melt(df, id=c("seq.list"))
+require(ggplot2)
+print.data.frame(df.melted)
+p.diff.2 <- ggplot(data=df.melted) + geom_point(aes(y=value, x=seq.list, color=variable),size=3) + theme_bw() 
+p.diff.2
+
+
+future:::ClusterRegistry("stop")
 ```
 
-```{r, fig.height=8, fig.width=12}
-p.diff
-dev.off()
+####Tree with the  massive taxa glomming
+```{r, fig.height=8, fig.width=16}
+library(ggtree)
+library(tidyverse)
+
+physeq <- ps.medium.glommed.4
+
+physeq.cz <- prune_samples(sample_data(physeq)$Soil %in% c("black soil"), physeq)
+physeq.cz  <- prune_taxa(taxa_sums(physeq.cz ) > 0, physeq.cz )
+
+physeq.sp <- prune_samples(sample_data(physeq)$Soil %in% c("sod-podzolic"), physeq)
+physeq.sp <- prune_taxa(taxa_sums(physeq.sp) > 0, physeq.sp)
+
+
+phyloseq <- physeq.sp
+tree <- phyloseq@phy_tree
+taxa.pruned <- as.data.frame(phyloseq@tax_table@.Data)
+taxa.pruned <- taxa.pruned %>%  mutate_all(as.character)
+old.tips <- tree$tip.label
+matches <- regmatches(tree$tip.label, gregexpr("[[:digit:]]+", tree$tip.label))
+taxa.pruned$number <- as.numeric(unlist(matches))
+taxa.pruned$taxa <- ifelse(is.na(taxa.pruned$Genus), taxa.pruned$Family, taxa.pruned$Genus)
+taxa.pruned[taxa.pruned == "Burkholderia-Caballeronia-Paraburkholderia"] <- "Burkholderia"
+taxa.pruned[taxa.pruned == "Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium"] <- "Pararhizobium"
+taxa.pruned$taxa2 <- ifelse(is.na(taxa.pruned$Species), with(taxa.pruned, paste0(taxa)), with(taxa.pruned, paste0(taxa, " ", Species )))
+taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Class)), with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Phylum)))
+class(taxa.pruned$Kingdom)
+tree$tip.label <- taxa.pruned$taxa3
+p1 <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
+p1
+
+phyloseq2 <- physeq.cz
+tree <- phyloseq2@phy_tree
+taxa.pruned <- as.data.frame(phyloseq2@tax_table@.Data)
+taxa.pruned <- taxa.pruned %>%  mutate_all(as.character)
+old.tips <- tree$tip.label
+matches <- regmatches(tree$tip.label, gregexpr("[[:digit:]]+", tree$tip.label))
+taxa.pruned$number <- as.numeric(unlist(matches))
+taxa.pruned$taxa <- ifelse(is.na(taxa.pruned$Genus), taxa.pruned$Family, taxa.pruned$Genus)
+taxa.pruned[taxa.pruned == "Burkholderia-Caballeronia-Paraburkholderia"] <- "Burkholderia"
+taxa.pruned[taxa.pruned == "Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium"] <- "Pararhizobium"
+taxa.pruned$taxa2 <- ifelse(is.na(taxa.pruned$Species), with(taxa.pruned, paste0(taxa)), with(taxa.pruned, paste0(taxa, " ", Species )))
+taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Class)), with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Phylum)))
+class(taxa.pruned$Kingdom)
+tree$tip.label <- taxa.pruned$taxa3
+p2 <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
+
+
+gridExtra::grid.arrange(p1, p2, ncol=2) 
 ```
 
 ### REWRITE! Not have enough time.  
