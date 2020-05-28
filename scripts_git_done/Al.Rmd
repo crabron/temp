@@ -21,12 +21,13 @@ ps <- readRDS(file = "~/storage/al_R/rf/ps.f.dec.rds")
 
 ### nice rownames 
 ```{r}
-
+sample_names(ps) <- paste0(ps@sam_data$Description, "_", stringr::str_split_fixed(sample_names(ps), "elimov.", 2)[,2])
+ps@sam_data
 ```
 
 ###Alpha richess
 1903 без In - неадекватная кривая разрежения
-Удалить 
+Удалить s8473_In_41
 ```{r, message=FALSE,echo=TRUE, fig.height=10, fig.width=14}
 plot_rich_reads_samlenames_lm <- function(ps.f){
   rish <- estimate_richness(ps.f, measures = "Observed")
@@ -46,59 +47,385 @@ plot_rich_reads_samlenames_lm <- function(ps.f){
 }
 
 plot_rich_reads_samlenames_lm(ps)
+ps.f <-  subset_samples(ps, sample_names(ps) != 's8473_In_41')
+ps.f <- prune_taxa(taxa_sums(ps.f) > 0,ps.f)
 ```
 ###Split
 ```{r}
-ps.f.s1903 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s1903"), ps.f.ch)
+ps.f.s1903 <- prune_samples(sample_data(ps.f)$Plant %in% c("s1903"), ps.f)
 ps.f.s1903 <- prune_taxa(taxa_sums(ps.f.s1903) > 0,ps.f.s1903)
 
-ps.f.s7307 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s7307"), ps.f.ch)
+ps.f.s7307 <- prune_samples(sample_data(ps.f)$Plant %in% c("s7307"), ps.f)
 ps.f.s7307 <- prune_taxa(taxa_sums(ps.f.s7307) > 0,ps.f.s7307)
 
-ps.f.s8473 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s8473"), ps.f.ch)
+ps.f.s8473 <- prune_samples(sample_data(ps.f)$Plant %in% c("s8473"), ps.f)
 ps.f.s8473 <- prune_taxa(taxa_sums(ps.f.s8473) > 0,ps.f.s8473)
 
-ps.f.s8353 <- prune_samples(sample_data(ps.f.ch)$Plant %in% c("s8353"), ps.f.ch)
+ps.f.s8353 <- prune_samples(sample_data(ps.f)$Plant %in% c("s8353"), ps.f)
 ps.f.s8353 <- prune_taxa(taxa_sums(ps.f.s8353) > 0,ps.f.s8353)
 
-physeq <- ps.f.s1903
-physeq@sam_data$Al
-
-physeq.Al.pos <- prune_samples(sample_data(physeq)$Al %in% c("pos"), physeq)
-physeq.Al.pos <- prune_taxa(taxa_sums(physeq.Al.pos) > 0, physeq.Al.pos)
-
-physeq.Al.neg <- prune_samples(sample_data(physeq)$Al %in% c("neg"),physeq)
-physeq.Al.neg <- prune_taxa(taxa_sums(physeq.Al.neg) > 0, physeq.Al.neg)
-
-physeq.In.pos <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
-physeq.In.pos <- prune_taxa(taxa_sums(physeq.In.pos) > 0,physeq.In.pos)
-
-physeq.In.neg <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
-physeq.In.neg <- prune_taxa(taxa_sums(physeq.In.neg) > 0,physeq.In.neg)
+# physeq <- ps.f.s1903
+# physeq@sam_data$Al
+# 
+# physeq.Al.pos <- prune_samples(sample_data(physeq)$Al %in% c("pos"), physeq)
+# physeq.Al.pos <- prune_taxa(taxa_sums(physeq.Al.pos) > 0, physeq.Al.pos)
+# 
+# physeq.Al.neg <- prune_samples(sample_data(physeq)$Al %in% c("neg"),physeq)
+# physeq.Al.neg <- prune_taxa(taxa_sums(physeq.Al.neg) > 0, physeq.Al.neg)
+# 
+# physeq.In.pos <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
+# physeq.In.pos <- prune_taxa(taxa_sums(physeq.In.pos) > 0,physeq.In.pos)
+# 
+# physeq.In.neg <- prune_samples(sample_data(physeq)$Inoculation %in% c("pos"), physeq)
+# physeq.In.neg <- prune_taxa(taxa_sums(physeq.In.neg) > 0,physeq.In.neg)
 ```
 ###Beta
+####Colour - plants
+Цвета для генотипов растений
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="Plant", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="Plant", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="Plant", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
+####Colour - Al
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="pH", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="pH", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="pH", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
+
+####Colour - Inoculation
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="Inoculation", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="Inoculation", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="Inoculation", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
+####Colour - Mic
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="Mic", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="Mic", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="Mic", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
+####Colour - SeedMg
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="SeedMg", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="SeedMg", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="SeedMg", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
+
+####Colour - SoilK
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="SoilK", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="SoilK", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="SoilK", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) 
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f)
+```
 
 ###PERMANOVA All
+Сначала для всего
 ```{r, echo=FALSE, rows.print = 112}
-permanova.forloop <- function(factor){
+permanova.forloop.noNestedPlant <- function(factor){
   require(vegan)
   require(phyloseq)
   dist <- phyloseq::distance(physeq, "bray")
   metadata <- as(sample_data(physeq@sam_data), "data.frame")
-  ad <- adonis2(as.formula(paste( "dist ~", factor)), data = metadata)
-  ad <- cbind2(ad[2,][3], ad[2,][5])
+  ad <- adonis2(as.formula(paste( "dist ~ ", factor)), data = metadata)
+  ad <- cbind2(ad[1,][3], ad[1,][5])
   return(ad)
 }
-physeq <- ps
-permanova.forloop.pos <- possibly(permanova.forloop, otherwise = NA)
-out <- map(colnames(physeq@sam_data), permanova.forloop.pos)
-out.d <- do.call("rbind", out)
-out.d[order(out.d$`Pr(>F)`),]
-
+physeq <- ps.f
+permanova.forloop.pos.noPlant <- possibly(permanova.forloop.noNestedPlant, otherwise = NA)
+out <- map(colnames(physeq@sam_data[,3:111]), permanova.forloop.pos.noPlant)
+out.d.noPlant <- do.call("rbind", out)
+out.d.noPlant[order(out.d.noPlant$R2, decreasing = TRUE),]
 
 ```
 
 ###PERMANOVA Plant
+Достоверность линейной вариации бета-разнообразия сообщества(Брей) в зависимости от факторов при разделении по генотипу растений.
+Description - description
+Достоверность после пермутаций для Фишера высокая, но низкий коэффицент детерминации(мало объяснённой дисперсии) для большой доли факторов. CCA нецелесообразен.
 ```{r, echo=FALSE, rows.print = 112}
 permanova.forloop <- function(factor){
   require(vegan)
@@ -109,13 +436,301 @@ permanova.forloop <- function(factor){
   ad <- cbind2(ad[2,][3], ad[2,][5])
   return(ad)
 }
-physeq <- ps
+physeq <- ps.f
 permanova.forloop.pos <- possibly(permanova.forloop, otherwise = NA)
-out <- map(colnames(physeq@sam_data), permanova.forloop.pos)
+out <- map(colnames(physeq@sam_data[,3:111]), permanova.forloop.pos)
 out.d <- do.call("rbind", out)
-out.d[order(out.d$`Pr(>F)`),]
+out.d[order(out.d$R2, decreasing = TRUE),]
 
 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+###Preprocessing tree
+
+###TREE diff
+
+```{r, echo=FALSE, rows.print = 112}
+
+```
+
+
+###7307
+####Split
+```{r}
+
+```
+
+```{r, message=FALSE,fig.height=8, fig.width=18, results=FALSE, fig.keep='all'}
+beta_custom_norm_NMDS_elli <- function(ps, seed = 7888, normtype="vst", color="Repeats"){
+  require(phyloseq)
+  require(ggplot2)
+  require(ggpubr)
+  require(DESeq2)
+  library(ggforce)
+  
+  
+  # beta_NMDS <- function(){
+  #normalisation. unifrac - rarefaction; wunifrac,bray - varstab
+  
+  diagdds = phyloseq_to_deseq2(ps, ~ Description)                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  if (normtype =="vst")
+    pst <- varianceStabilizingTransformation(diagdds)
+  if (normtype =="log") 
+    pst <- rlogTransformation(diagdds)
+  
+  pst.dimmed <- t(as.matrix(assay(pst))) 
+  pst.dimmed[pst.dimmed < 0.0] <- 0.0
+  ps.varstab <- ps
+  otu_table(ps.varstab) <- otu_table(pst.dimmed, taxa_are_rows = FALSE) 
+  
+  ps.rand <- rarefy_even_depth(ps, rngseed = seed)
+  
+  #beta and ordination
+  
+  ordination.b <- ordinate(ps.varstab, "NMDS", "bray")
+  ordination.u <- ordinate(ps.rand, "NMDS", "unifrac")
+  ordination.w <- ordinate(ps.varstab, "NMDS", "wunifrac")
+  
+  #plotting
+  p1 = plot_ordination(ps, ordination.b, type="sample", color="Description", title="NMDS - Bray", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) +
+    geom_mark_ellipse(aes(group = Description, label = Description), label.fontsize = 10, label.buffer = unit(2, "mm"), label.minwidth = unit(5, "mm"),con.cap = unit(0.1, "mm"))
+  
+  p2 = plot_ordination(ps, ordination.u, type="sample", color="Description", title="NMDS - unifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) +
+    geom_mark_ellipse(aes(group = Description, label = Description), label.fontsize = 10, label.buffer = unit(2, "mm"), label.minwidth = unit(5, "mm"),con.cap = unit(0.1, "mm"))
+  
+  p3 = plot_ordination(ps, ordination.w, type="sample", color="Description", title="NMDS - wunifrac", 
+                       axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 10)) + geom_point(size = 3) + 
+    geom_mark_ellipse(aes(group = Description, label = Description), label.fontsize = 10, label.buffer = unit(2, "mm"), label.minwidth = unit(5, "mm"),con.cap = unit(0.1, "mm"))
+  
+  #merge by ggpubr
+  
+  p.all <- ggarrange(p1, p2, p3, ncol = 3 , nrow = 1, common.legend = TRUE, legend = "none", font.label = list(size = 12, face = "bold", color ="black"))
+  
+  return(p.all)
+}
+
+beta_custom_norm_NMDS_elli(ps.f.s7307)
+```
+```{r, echo=FALSE, rows.print = 112}
+physeq <- ps.f.s7307
+permanova.forloop.pos.noPlant <- possibly(permanova.forloop.noNestedPlant, otherwise = NA)
+out <- map(colnames(physeq@sam_data[,3:111]), permanova.forloop.pos.noPlant)
+out.d.noPlant <- do.call("rbind", out)
+out.d.noPlant[order(out.d.noPlant$R2, decreasing = TRUE),]
+```
+####Shitty alpha violins
+```{r, , fig.height=6, fig.width=15}
+library(ggpubr)
+alpha.custom <- function(ps.f.i, arrga = "PD"){
+  require(picante)
+  pd <- pd(ps.f.i@otu_table@.Data, ps.f.i@phy_tree)
+  
+  pd1 <- estimate_richness(ps.f.i, measures=c("Observed", "InvSimpson", "Shannon"))
+  pd <- cbind(pd,ps.f.i@sam_data, pd1 )
+  
+  bmi <- levels(as.factor(pd$Description))
+  bmi.pairs <- combn(seq_along(bmi), 2, simplify = FALSE, FUN = function(i)bmi[i])
+  p1 <- ggviolin(pd, x = "Description", y = arrga,
+                 add = "boxplot", fill = "Description") + stat_compare_means(comparisons = bmi.pairs, method = "wilcox.test") +
+    scale_x_discrete(limits = c("s7307","s7307_In",  "s7307_Al",  "s7307_In_Al")) + theme(axis.title.x = element_blank(), legend.title = element_blank())
+  return(p1)
+}
+
+p.alpha.Cdt.oo <- alpha.custom(physeq, arrga = "Observed")
+p.alpha.Cdt.sh <- alpha.custom(physeq, arrga = "Shannon")
+p.alpha.Cdt.is <- alpha.custom(physeq, arrga = "InvSimpson")
+p.alpha.Cdt.pd <- alpha.custom(physeq, arrga = "PD")
+
+
+p1 <- ggarrange(p.alpha.Cdt.oo, p.alpha.Cdt.sh,p.alpha.Cdt.is, p.alpha.Cdt.pd , ncol = 4 ,label.x = 0.105, nrow = 1, common.legend = TRUE)
+p1
+
+```
+
+###Split dataset by Al and In
+```{r, message=FALSE}
+physeq <- subset_taxa(physeq, !is.na(Phylum))
+
+
+physeq.In <- prune_samples(sample_data(physeq)$Inoculation %in% c("+"), physeq)
+physeq.In  <- prune_taxa(taxa_sums(physeq.In) > 0, physeq.In)
+
+physeq.wIn <- prune_samples(sample_data(physeq)$Inoculation %in% c("-"), physeq)
+physeq.wIn  <- prune_taxa(taxa_sums(physeq.wIn) > 0, physeq.wIn)
+
+```
+
+####Correct Al/In meta
+```{r}
+physeq.In@sam_data$Al <- c("neg", "neg", "neg", "neg", "pos", "pos", "pos", "pos")
+physeq.wIn@sam_data$Al <- c("neg", "neg", "neg", "neg", "pos", "pos", "pos", "pos")
+
+```
+
+
+####Improve on des function - add a required factor(with as.formula function)
+```{r, message=FALSE}
+des_w_simper <- function(ps, factor){
+  require(DESeq2)
+  require(vegan)
+  require(tibble)
+  
+  diagdds = phyloseq_to_deseq2(ps, as.formula(paste( "~", factor)))                  
+  diagdds = estimateSizeFactors(diagdds, type="poscounts")
+  diagdds = estimateDispersions(diagdds, fitType = "local") 
+  diagdds = DESeq(diagdds)
+  samp <-sample_data(ps)
+  dds.counts <- diagdds@assays@.xData$data$counts
+  dds.counts.df <- as.data.frame(dds.counts)
+  aggdata <- t(aggregate.data.frame(as.data.frame(as.data.frame(t(diagdds@assays@.xData$data$mu))), by=list(samp[[factor]]), median))
+  colnames(aggdata) <- aggdata[1,]
+  aggdata <- aggdata[-1,]
+  res = results(diagdds)
+  res.df <- as.data.frame(res)
+  nice <- cbind(res.df, as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])               
+  return(nice)
+} 
+
+des.In <- des_w_simper(physeq.In, "Al")
+des.wIn <- des_w_simper(physeq.wIn, "Al")
+```
+
+
+####filtration ASVs in the DESeq2 result tables by abundanse and change confidence level
+После порога по среденему значению 60 ридов после нормирования и p-value с поправкой на множественное сравнение:
+- для горизонта ay - 37 отличающихся филотипа
+- для горизонта с - 47 отличающихся филотипа
+```{r,message=FALSE}
+filter.des <- function(des, alpha=0.1, baseMean = 15){
+  des <- des[(des$padj < alpha), ]
+  des <- des[(des$baseMean > baseMean),]
+  #des <- des[(des$log2FoldChange > 0),]
+  des <-  des[(is.na(des$padj) != TRUE),]
+  return(des)
+}
+alpha.c <- 0.1
+baseMean.c <- 15=
+des.In.filt <- filter.des(des.In, alpha = alpha.c, baseMean = baseMean.c)
+len.c <- length(rownames(des.In.filt))
+paste0("length des.In after filtation with param: alpha - ", alpha.c, ", baseMean - ", baseMean.c, " ==> ", len.c)
+
+alpha.ay <- 0.1
+baseMean.ay <- 15
+des.wIn.filt <- filter.des(des.wIn, alpha = alpha.ay, baseMean = baseMean.ay)
+len.ay <- length(rownames(des.wIn.filt))
+paste0("length des.wIn  after filtation with param: alpha - ", alpha.ay, ", baseMean - ", baseMean.ay, " ==> ", len.ay)
+
+```
+
+####Tree for soil changed taxa
+
+```{r,  message=FALSE, results=FALSE, echo=FALSE, fig.height=12, fig.width=16}
+list.both <- c(rownames(des.In.filt), rownames(des.wIn.filt)) 
+ps.changed <- prune_taxa(list.both, physeq)
+phyloseq <- ps.changed
+library(ggtree)
+library(tidyverse)
+tree <- phyloseq@phy_tree
+taxa.pruned <- as.data.frame(phyloseq@tax_table@.Data)
+taxa.pruned <- taxa.pruned %>%  mutate_all(as.character)
+old.tips <- tree$tip.label
+matches <- regmatches(tree$tip.label, gregexpr("[[:digit:]]+", tree$tip.label))
+taxa.pruned$number <- as.numeric(unlist(matches))
+taxa.pruned$taxa <- ifelse(is.na(taxa.pruned$Genus), taxa.pruned$Family, taxa.pruned$Genus)
+taxa.pruned[taxa.pruned == "Burkholderia-Caballeronia-Paraburkholderia"] <- "Burkholderia"
+taxa.pruned[taxa.pruned == "Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium"] <- "Pararhizobium"
+taxa.pruned$taxa2 <- ifelse(is.na(taxa.pruned$Species), with(taxa.pruned, paste0(taxa)), with(taxa.pruned, paste0(taxa, " ", Species )))
+taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Class)), with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Phylum)))
+class(taxa.pruned$kingdom)
+tree$tip.label <- taxa.pruned$taxa3
+p <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
+des.wIn
+```
+
+####Add log2FoldChange for tree. Red - prevalence in CZ, blue - in SP.
+```{r,  message=FALSE,echo=TRUE, fig.height=12, fig.width=14}
+
+t.ay <- as_tibble(des.wIn, rownames = "id") %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label)%>% 
+  select(id, log2FoldChange)  %>%  
+  dplyr::rename(notIn = log2FoldChange)
+
+t.c <- as_tibble(des.In, rownames = "id") %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>% 
+  select(id, log2FoldChange) %>%  
+  dplyr::rename(In = log2FoldChange)
+
+t.all <- full_join(t.ay, t.c)
+
+names.d <-  cbind(long = tree$tip.label, short = old.tips) %>% data.frame(row.names = "short")
+t.names <- as_tibble(names.d, rownames = "id")
+d.all.tips <- full_join(t.names, t.all) %>%  select(-c(id)) %>% 
+  as.data.frame() %>% column_to_rownames("long")
+
+p2 <- gheatmap(p, d.all.tips, offset=2, width=0.8)  + scale_colour_gradientn(colours = c("blue", "white", "red"),na.value = "grey50", guide = "colourbar",aesthetics = "fill") 
+p2 <- p2 + labs(fill = "L2FC without Al/ Al")
+
+```
+
+
+
+```{r, message=FALSE,echo=FALSE, fig.height=14, fig.width=16}
+otus.ay.rel <- t(apply(otu_table(physeq.wIn), 1, function(x) x / sum(x)))
+otus.c.rel <- t(apply(otu_table(physeq.In), 1, function(x) x / sum(x)))
+# for ay
+as_tibble(t(otus.ay.rel ), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.ay
+as_tibble(t(otus.ay.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(ayMean=rowMeans(.)) %>% 
+  select(ayMean) -> res.ay
+res.ayMean.rel <- cbind2(id.ay,res.ay)
+
+# for c
+as_tibble(t(otus.c.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select(id) -> id.c
+as_tibble(t(otus.c.rel), rownames = "id" ) %>% 
+  filter(id %in% phyloseq@phy_tree$tip.label) %>%
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(cMean=rowMeans(.)) %>% 
+  select(cMean) -> res.c
+res.cMean.rel <- cbind2(id.c, res.c)
+
+
+all.resMean.rel <- full_join(res.ayMean.rel, res.cMean.rel)
+all.resMean.rel %>% replace(is.na(.), 0) -> all.resMean.rel
+all.resMean.rel$ayMean <- 0 - all.resMean.rel$ayMean
+all.resMean.rel.melted <- reshape2::melt(all.resMean.rel, id=c("id"))
+
+library(reshape2)
+library(ggstance)
+all.resMean.rel.melted <- melt(all.resMean.rel, id=c("id"))
+first.tree <- phyloseq@phy_tree
+ids.tree <-  data.frame(id = first.tree$tip.label, id.taxa = tree$tip.label)
+some.join <- full_join(ids.tree, all.resMean.rel.melted)
+some.join <- subset(some.join, select = -c(id))
+some.join["numbers"] <-  ifelse(some.join$value == 0, NA, abs(some.join$value))
+some.join$value <- some.join$value*100
+some.join["position"] <-  ifelse(some.join$value >= 0, some.join$value + 0.5, some.join$value - 0.5)
+p4 <- facet_plot(p2, panel = "no / In", data = some.join,  geom = geom_barh, 
+                 mapping = aes(x = value, label=value), color = "salmon", fill = "white",
+                 stat='identity')
+
+p4 <- facet_plot(p4, geom=geom_text , data = some.join, mapping=aes(x=position,label=round(numbers*100, digits = 2)), panel = "no / In")
+
+library(gtable)
+library(grid)
+gt <-  ggplot_gtable(ggplot_build(p4))
+gt$widths[7] <-  0.5*gt$widths[7] # in this case it was colmun 7 - reduce the width by a half
+plot(gt) # plot with grid draw
+
+```

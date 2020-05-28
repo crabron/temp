@@ -26,11 +26,19 @@ ps.f.plos <- prune_taxa(taxa_sums(ps.f.plos) > 0, ps.f.plos)
 saveRDS(ps.f.plos, file = "~/storage/plates/ps.f.plos.rds")
 ```
 
-```{r, message=FALSE}
+```{r, message=FALSE, rows.print = 40}
 setwd("~/storage/plates/plos/")
 library(phyloseq)
 ps <- readRDS(file = "~/storage/plates/ps.f.plos.rds") 
-ps
+metadata <- ps@sam_data
+metadata$Description <-  as.character(metadata$Repeats)
+metadata$Description[metadata$Description == "getchinson_sod-podzolic"] <- "gSP"
+metadata$Description[metadata$Description == "getchinson_black soil"] <- "gCZ"
+metadata$Description[metadata$Description == "soil dna_sod-podzolic"] <- "bsSP"
+metadata$Description[metadata$Description == "soil dna_black soil"] <- "bsCZ"
+metadata$Description <- factor(metadata$Description, levels =  c("gSP", "gCZ", "bsSP", "bsCZ"))
+sample_data(ps) <- metadata
+ps@sam_data
 ```
 
 ###Richness/depth correlation. Outliers - sample 81.
@@ -155,28 +163,27 @@ beta_custom_norm_NMDS_elli(ps.f)
 ###Basic DESeq2 by Soil variable
 
 ```{r,message=FALSE}
-Des.soil.w.simper <- function(ps){
+des_w_simper <- function(ps, factor){
   require(DESeq2)
   require(vegan)
   require(tibble)
+  require(phyloseq)
   
-  diagdds = phyloseq_to_deseq2(ps, ~ Soil)                  
+  diagdds = phyloseq_to_deseq2(ps, as.formula(paste( "~", factor)))                  
   diagdds = estimateSizeFactors(diagdds, type="poscounts")
   diagdds = estimateDispersions(diagdds, fitType = "local") 
   diagdds = DESeq(diagdds)
   samp <-sample_data(ps)
-  dds.counts <- diagdds@assays@.xData$data$counts
-  dds.counts.df <- as.data.frame(dds.counts)
-  aggdata <- t(aggregate.data.frame(as.data.frame(as.data.frame(t(diagdds@assays@.xData$data$mu))), by=list(samp$Soil), median))
+  aggdata <- t(aggregate.data.frame(as.data.frame(as.data.frame(t(diagdds@assays@data$mu))), by=list(samp[[factor]]), median))
   colnames(aggdata) <- aggdata[1,]
   aggdata <- aggdata[-1,]
   res = results(diagdds)
   res.df <- as.data.frame(res)
-  nice <- cbind(res.df,as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])               
-  return(nice)
+  nice <- cbind(res.df, as.data.frame(ps@tax_table@.Data[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
 } 
-des.soil <- Des.soil.w.simper(ps.soil) 
-des.medium <- Des.soil.w.simper(ps.medium) 
+
+des.soil <- des_w_simper(ps.soil, "Soil") 
+des.medium <- des_w_simper(ps.medium, "Soil") 
 ```
 
 ####filtration ASVs in the DESeq2 result tables by abundanse and change confidence level
@@ -225,7 +232,7 @@ taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pr
 class(taxa.pruned$Kingdom)
 tree$tip.label <- taxa.pruned$taxa3
 p <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
-p
+
 ```
 ####Add log2FoldChange for tree. Red - prevalence in CZ, blue - in SP.
 
@@ -312,26 +319,6 @@ plot(gt) # plot with grid draw
 ####Improve on des function - add a required factor(with as.formula function)
 
 ```{r, message=FALSE}
-des_w_simper <- function(ps, factor){
-  require(DESeq2)
-  require(vegan)
-  require(tibble)
-  
-  diagdds = phyloseq_to_deseq2(ps, as.formula(paste( "~", factor)))                  
-  diagdds = estimateSizeFactors(diagdds, type="poscounts")
-  diagdds = estimateDispersions(diagdds, fitType = "local") 
-  diagdds = DESeq(diagdds)
-  samp <-sample_data(ps)
-  dds.counts <- diagdds@assays@.xData$data$counts
-  dds.counts.df <- as.data.frame(dds.counts)
-  aggdata <- t(aggregate.data.frame(as.data.frame(as.data.frame(t(diagdds@assays@.xData$data$mu))), by=list(samp[[factor]]), median))
-  colnames(aggdata) <- aggdata[1,]
-  aggdata <- aggdata[-1,]
-  res = results(diagdds)
-  res.df <- as.data.frame(res)
-  nice <- cbind(res.df, as.data.frame(tax_table(ps)[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])               
-  return(nice)
-} 
 
 des.sp <- des_w_simper(ps.sp, "Medium")
 des.cz <- des_w_simper(ps.cz, "Medium")
@@ -856,7 +843,9 @@ length(return_elders(physeq.sp, h))
 replicate(100, main_diff(0.4, ps.medium))
 ps.medium
 main_diff(0.4, ps.medium)
-````
+```
+
+
 ####Same shit, diff core math algorithm
 ```{r, message=FALSE}
 
@@ -1015,9 +1004,15 @@ paste0("length des.cz after filtation with param: alpha - ", alpha.cz, ", baseMe
 
 ```
 
+```{r}
+View(des.cz)
+d.all.tips
+otus.soil.rel[,"Seq1"]
+```
+
 ####REWRITE! Collect all eggs in one bucket
 
-```{r,  message=FALSE, results=FALSE, echo=FALSE, fig.height=12, fig.width=16, eval=TRUE}
+```{r,  message=FALSE, results=FALSE, echo=FALSE, fig.height=18, fig.width=16, eval=TRUE}
 list.both <- c(rownames(des.sp.filt), rownames(des.cz.filt)) 
 ps.changed <- prune_taxa(list.both, ps.f)
 phyloseq <- ps.changed
@@ -1037,15 +1032,16 @@ taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pr
 class(taxa.pruned$Kingdom)
 tree$tip.label <- taxa.pruned$taxa3
 p <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
+
 t.cz <-   as_tibble(des.cz, rownames = "id") %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>% 
   select(id, log2FoldChange) %>%  
-  rename(Getchinson = log2FoldChange)
+  rename(CZ = log2FoldChange)
 
 t.sp <- as_tibble(des.sp, rownames = "id") %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>% 
   select(id, log2FoldChange) %>%  
-  rename(Soil_DNA = log2FoldChange)
+  rename(SP = log2FoldChange)
 
 t.all <- full_join(t.cz, t.sp)
 
@@ -1055,38 +1051,39 @@ d.all.tips <- full_join(t.names, t.all) %>%  select(-c(id)) %>%
   as.data.frame() %>% column_to_rownames("long")
 
 p2 <- gheatmap(p, d.all.tips, offset=2, width=0.8)  + scale_colour_gradientn(colours = c("blue", "white", "red"),na.value = "grey50", guide = "colourbar",aesthetics = "fill") 
-p2 <- p2 + labs(fill = "L2FC Soil_DNA/Getchinson")
+p2 <- p2 + labs(fill = "L2FC Getchinson/Soil_DNA")
 
-otus.cz.rel <- t(apply(otu_table(ps.cz), 1, function(x) x / sum(x)))
-otus.sp.rel <- t(apply(otu_table(ps.sp), 1, function(x) x / sum(x)))
-# for cz
-as_tibble(t(otus.cz.rel ), rownames = "id" ) %>% 
+otus.soil.rel <- t(apply(otu_table(ps.soil), 1, function(x) x / sum(x)))
+otus.medium.rel <- t(apply(otu_table(ps.medium), 1, function(x) x / sum(x)))
+
+# for Soil_Dna
+as_tibble(t(otus.soil.rel ), rownames = "id" ) %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>%
   select(id) -> id.cz
-as_tibble(t(otus.cz.rel), rownames = "id" ) %>% 
+as_tibble(t(otus.soil.rel), rownames = "id" ) %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>%
   select_if(is.numeric) %>% 
   replace(is.na(.), 0) %>% 
-  mutate(czMean=rowMeans(.)) %>% 
-  select(czMean) -> res.cz
-res.czMean.rel <- cbind2(id.cz,res.cz)
+  mutate(soilMean=rowMeans(.)) %>% 
+  select(soilMean) -> res.cz
+res.soilMean.rel <- cbind2(id.cz, res.cz)
 
-# for sp
-as_tibble(t(otus.sp.rel), rownames = "id" ) %>% 
+# for Getchinson
+as_tibble(t(otus.medium.rel), rownames = "id" ) %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>%
   select(id) -> id.sp
-as_tibble(t(otus.sp.rel), rownames = "id" ) %>% 
+as_tibble(t(otus.medium.rel), rownames = "id" ) %>% 
   filter(id %in% phyloseq@phy_tree$tip.label) %>%
   select_if(is.numeric) %>% 
   replace(is.na(.), 0) %>% 
-  mutate(spMean=rowMeans(.)) %>% 
-  select(spMean) -> res.sp
-res.spMean.rel <- cbind2(id.sp, res.sp)
+  mutate(getMean=rowMeans(.)) %>% 
+  select(getMean) -> res.sp
+res.getMean.rel <- cbind2(id.sp, res.sp)
 
 
-all.resMean.rel <- full_join(res.czMean.rel, res.spMean.rel)
+all.resMean.rel <- full_join(res.soilMean.rel, res.getMean.rel)
 all.resMean.rel %>% replace(is.na(.), 0) -> all.resMean.rel
-all.resMean.rel$czMean <- 0 - all.resMean.rel$czMean
+all.resMean.rel$getMean <- 0 - all.resMean.rel$getMean
 all.resMean.rel.melted <- reshape2::melt(all.resMean.rel, id=c("id"))
 
 library(reshape2)
@@ -1098,12 +1095,13 @@ some.join <- full_join(ids.tree, all.resMean.rel.melted)
 some.join <- subset(some.join, select = -c(id))
 some.join["numbers"] <-  ifelse(some.join$value == 0, NA, abs(some.join$value))
 some.join$value <- some.join$value*100
-some.join["position"] <-  ifelse(some.join$value >= 0, some.join$value + 0.5, some.join$value - 0.5)
-p4 <- facet_plot(p2, panel = "Soil_DNA / Getchinson", data = some.join,  geom = geom_barh, 
+some.join["position"] <-  ifelse(some.join$value >= 0, some.join$value + 0.8, some.join$value - 0.8)
+
+p4 <- facet_plot(p2, panel = "Getchinson/Soil_DNA", data = some.join,  geom = geom_barh, 
                  mapping = aes(x = value, label=value), color = "salmon", fill = "white",
                  stat='identity')
 
-p4 <- facet_plot(p4, geom=geom_text , data = some.join, mapping=aes(x=position,label=round(numbers*100, digits = 2)), panel = "Soil_DNA / Getchinson")
+p4 <- facet_plot(p4, geom=geom_text , data = some.join, mapping=aes(x=position,label=round(numbers*100, digits = 2)), panel = "Getchinson/Soil_DNA")
 
 library(gtable)
 library(grid)
@@ -1148,4 +1146,209 @@ plot_rich_reads_samlenames_lm(ps.more)
 
 ```{r, message=FALSE,echo=TRUE, fig.height=8, fig.width=16}
 beta_custom_norm_NMDS_elli(ps.more)
+```
+
+
+
+##Varstab normalisation. little plot
+```{r, , fig.height=8, fig.width=8,  rows.print = 50}
+
+physeq <- ps.f
+veganifyOTU <- function(physeq){
+  require(phyloseq)
+  if(taxa_are_rows(physeq)){physeq <- t(physeq)}
+  return(as(otu_table(physeq), "matrix"))
+}
+otus <- veganifyOTU(physeq)
+meta <- as(sample_data(physeq), "data.frame")
+otus <- t(otus)
+deseq_counts <- DESeqDataSetFromMatrix(otus, colData = meta, design = ~ Medium_or_Soil) 
+deseq_counts_vst <- varianceStabilizingTransformation(deseq_counts)
+vst_trans_count_tab <- assay(deseq_counts_vst)
+
+colnames(vst_trans_count_tab) <- meta$Medium_or_Soil
+d.vst <- as.data.frame(vst_trans_count_tab)
+t.d.vst <- t(d.vst)
+vst.median <- aggregate(t.d.vst, by=list(meta$Medium_or_Soil), median) 
+vst.median <- as.data.frame(vst.median)
+vst.median$Group.1 <- as.character(vst.median$Group.1) 
+vst.median <-  column_to_rownames(vst.median, "Group.1")
+vst.median <- t(vst.median)
+vst.median <- as.data.frame(vst.median)
+vst.median
+ggplot(data=vst.median) + geom_point(aes(x = soil, y = medium)) 
+
+```
+###g/bs core
+```{r}
+vst.median
+core.seqs <- rownames(vst.median[vst.median$medium >= -4 & vst.median$soil >= -4,])
+vst_trans_count_tab_r <- vst_trans_count_tab
+
+colnames(vst_trans_count_tab_r) <- meta$Description
+d.vst.r <- as.data.frame(vst_trans_count_tab_r)
+t.d.vst.r <- t(d.vst.r)
+vst.median.r <- aggregate(t.d.vst.r, by=list(meta$Description), median) 
+vst.median.r <- as.data.frame(vst.median.r)
+vst.median.r$Group.1 <- as.character(vst.median.r$Group.1) 
+vst.median.r <-  column_to_rownames(vst.median.r, "Group.1")
+vst.median.r <- t(vst.median.r)
+vst.median.r <- as.data.frame(vst.median.r)
+vst.median.r
+colnames(vst_trans_count_tab_r) <- meta$Description
+cbind2(vst.median.r[core.seqs,],ps.f@tax_table@.Data[core.seqs,])
+
+```
+###culturome core
+```{r}
+vst.median
+core.cult.seqs <- rownames(vst.median.r[vst.median.r$gSP >= -4 & vst.median.r$gCZ >= -4,])
+vst.median.r.cult <- vst.median.r[core.cult.seqs,]
+
+
+
+ps.changed <- prune_taxa(core.cult.seqs, ps.f)
+phyloseq <- ps.changed
+library(ggtree)
+library(tidyverse)
+tree <- phyloseq@phy_tree
+taxa.pruned <- as.data.frame(phyloseq@tax_table@.Data)
+taxa.pruned <- taxa.pruned %>%  mutate_all(as.character)
+old.tips <- tree$tip.label
+matches <- regmatches(tree$tip.label, gregexpr("[[:digit:]]+", tree$tip.label))
+taxa.pruned$number <- as.numeric(unlist(matches))
+taxa.pruned$taxa <- ifelse(is.na(taxa.pruned$Genus), taxa.pruned$Family, taxa.pruned$Genus)
+taxa.pruned[taxa.pruned == "Burkholderia-Caballeronia-Paraburkholderia"] <- "Burkholderia"
+taxa.pruned[taxa.pruned == "Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium"] <- "Pararhizobium"
+taxa.pruned$taxa2 <- ifelse(is.na(taxa.pruned$Species), with(taxa.pruned, paste0(taxa)), with(taxa.pruned, paste0(taxa, " ", Species )))
+taxa.pruned$taxa3 <- ifelse(taxa.pruned$Phylum == "Proteobacteria", with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Class)), with(taxa.pruned, paste0(taxa.pruned$number, ".", taxa2, " // ", Phylum)))
+class(taxa.pruned$Kingdom)
+tree$tip.label <- taxa.pruned$taxa3
+p <- ggtree(tree, ladderize = F) + geom_tiplab(mapping = aes(), align=TRUE, linesize=.5) + xlim(NA, 4)
+
+d <- vst.median.r.cult 
+d <- rownames_to_column(d, "id")
+rownames(d) <- tree$tip.label
+names.d <-  cbind(long = tree$tip.label, short = old.tips) %>% data.frame(row.names = "short")
+t.names <- as_tibble(names.d, rownames = "id")
+d.all.tips <- full_join(t.names, d) %>%  select(-c(id)) %>%
+  as.data.frame() %>% column_to_rownames("long")
+
+p2 <- gheatmap(p, d.all.tips, offset=2, width=0.8)  + scale_colour_gradientn(colours = c("blue", "white", "red"),na.value = "grey50", guide = "colourbar", aesthetics = "fill") 
+p2
+```
+```{r}
+vst.median.r.cult
+```
+
+
+```{r}
+
+colnames(aggdata) <- aggdata[1,]
+aggdata <- aggdata[-1,]
+res = results(diagdds)
+res.df <- as.data.frame(res)
+nice <- cbind(res.df, as.data.frame(ps@tax_table@.Data[rownames(res.df),]), as.data.frame(aggdata)[rownames(res.df),])
+
+ggplot(data=des.sp.actinobacteria) + geom_point(aes(y = log2(getchinson), x = log2(`soil dna`))) 
+
+
++ geom_text(aes(x = log2(getchinson), y = log2(`soil dna`), label = ID))
+
+out.d.noPlant[order(out.d.noPlant$R2, decreasing = TRUE),]
+
+all.resMean.rel.actinobaceria <-  all.resMean.rel[all.resMean.rel$id %in% des.sp.actinobacteria$ID,]
+
+
+otus.soil.rel <- t(apply(otu_table(ps.soil), 1, function(x) x / sum(x)))
+otus.medium.rel <- t(apply(otu_table(ps.medium), 1, function(x) x / sum(x)))
+otus.medium.rel
+# for Soil_Dna
+as_tibble(t(otus.soil.rel ), rownames = "id" ) %>% 
+  select(id) -> id.cz
+as_tibble(t(otus.soil.rel), rownames = "id" ) %>% 
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(soilMean=rowMeans(.)) %>% 
+  select(soilMean) -> res.cz
+res.soilMean.rel <- cbind2(id.cz, res.cz)
+
+# for Getchinson
+as_tibble(t(otus.medium.rel), rownames = "id" ) %>% 
+  select(id) -> id.sp
+as_tibble(t(otus.medium.rel), rownames = "id" ) %>% 
+  select_if(is.numeric) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(getMean=rowMeans(.)) %>% 
+  select(getMean) -> res.sp
+res.getMean.rel <- cbind2(id.sp, res.sp)
+
+all.resMean.rel <- full_join(res.soilMean.rel, res.getMean.rel)
+all.resMean.rel
+ggplot(data=all.resMean.rel.melted) + geom_point(aes(x = soilMean, y = getMean)) 
+
+ggplot(data=all.resMean.rel) + geom_point(aes(x = soilMean, y = getMean)) 
+ps.f@otu_table@.Data[,"Seq22"] %>% as.tibble() %>% mutate(id = ps.f@sam_data$Description)
+all.resMean.rel.actinobaceria
+
+
+
+```
+
+### alpha
+```{r, , fig.height=12, fig.width=20}
+library(ggpubr)
+alpha.custom <- function(ps.f, arrga = "PD"){
+  require(picante)
+  pd <- pd(ps.f@otu_table@.Data, ps.f@phy_tree)
+  
+  pd1 <- estimate_richness(ps.f, measures=c("Observed", "InvSimpson", "Shannon"))
+  pd <- cbind(pd, ps.f@sam_data, pd1 )
+  
+  bmi <- levels(as.factor(pd$Description))
+  bmi.pairs <- combn(seq_along(bmi), 2, simplify = FALSE, FUN = function(i)bmi[i])
+  p1 <- ggviolin(pd, x = "Description", y = arrga,
+                 add = "boxplot", fill = "Description") + stat_compare_means(comparisons = bmi.pairs, method = "wilcox.test") +
+    scale_x_discrete(limits = c("gSP", "gCZ", "bsSP", "bsCZ")) + theme(axis.title.x = element_blank(), legend.title = element_blank())
+  return(p1)
+}
+
+p.alpha.Cdt.oo <- alpha.custom(ps.f, arrga = "Observed")
+p.alpha.Cdt.sh <- alpha.custom(ps.f, arrga = "PD")
+p.alpha.Cdt.is <- alpha.custom(ps.f, arrga = "Shannon")
+p.alpha.Cdt.pd <- alpha.custom(ps.f, arrga = "InvSimpson")
+
+
+p1 <- ggarrange(p.alpha.Cdt.oo, p.alpha.Cdt.sh,p.alpha.Cdt.is, p.alpha.Cdt.pd , ncol = 4 ,label.x = 0.105, nrow = 1, common.legend = TRUE)
+ps.f@sam_data$Description
+
+p1
+```
+
+```{r}
+library(breakaway)
+ps.merged.repeats <- merge_samples(ps.f, "Description")
+physeq <- ps.merged.repeats
+ps.merged.repeats@sam_data
+
+veganifyOTU <- function(physeq){
+  require(phyloseq)
+  if(taxa_are_rows(physeq)){physeq <- t(physeq)}
+  return(as(otu_table(physeq), "matrix"))
+}
+estimate_richness(physeq, measures=c("Observed"))
+otus <- veganifyOTU(physeq)
+meta <- as(sample_data(physeq), "data.frame")
+otus <- t(otus)
+head(colnames(otus) == rownames(meta))
+
+rownames(meta)
+frequencytablelist <- build_frequency_count_tables(otus)
+frequencytablelist
+frequencytablelist[[3]]
+breakaway(frequencytablelist[[3]])
+
+breakaway(frequencytablelist[[20]])
+
+objective_bayes_negbin(frequencytablelist[[4]], plot = T)
 ```
