@@ -734,3 +734,13 @@ gt$widths[7] <-  0.5*gt$widths[7] # in this case it was colmun 7 - reduce the wi
 plot(gt) # plot with grid draw
 
 ```
+
+### export data to rf analisys
+
+```{r}
+
+
+
+
+```
+
