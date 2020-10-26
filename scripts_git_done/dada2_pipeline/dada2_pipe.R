@@ -67,7 +67,7 @@ dada2_pipe <- function(path = "in/", path_trein_set = "data/silva_nr_v132_train_
       --input-path rep_seq.fasta \
       --output-path rep_seq.qza \
       --type 'FeatureData[Sequence]'
-      qiime fragment-insertion sepp --i-representative-sequences rep_seq.qza  --o-tree data/insertion-tree.qza  --o-placements data/insertion-placements.qza --p-threads 20
+      qiime fragment-insertion sepp --i-representative-sequences rep_seq.qza  --o-tree insertion-tree.qza  --o-placements insertion-placements.qza --p-threads 20
       qiime tools import \
       --input-path otu_table.biom \
       --type 'FeatureTable[Frequency]' \
@@ -117,4 +117,6 @@ delete_mit_chl <- function(ps){
   ps <- pop_taxa(ps, badTaxa)
   return(ps)
 }
+
+
 

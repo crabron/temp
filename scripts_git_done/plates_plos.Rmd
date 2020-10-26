@@ -1337,7 +1337,7 @@ beta_custom_norm_NMDS_elli(ps.more)
 
 
 ##Varstab normalisation. little plot
-```{r, , fig.height=8, fig.width=8,  rows.print = 50}
+```{r, fig.height=8, fig.width=8,  rows.print = 50}
 
 physeq <- ps.f
 veganifyOTU <- function(physeq){
@@ -1768,7 +1768,7 @@ length(rownames(ps.soil@tax_table))
 amp.medium.family <- phyloseq_to_amp(ps.medium.family)
 amp.soil.family <- phyloseq_to_amp(ps.soil.family)
 
-amp.medium <- phyloseq_to_amp(ps.medium
+amp.medium <- phyloseq_to_amp(ps.medium)
 amp.soil <- phyloseq_to_amp(ps.soil)
 
 amp.medium
@@ -1829,4 +1829,36 @@ names.medium.sp <- subset(ps.medium@sam_data, ps.medium@sam_data$Soil %in% "sod-
 names.medium.cz <- subset(ps.medium@sam_data, ps.medium@sam_data$Soil %in% "black soil") %>% rownames()
 
 usedist::dist_between_centroids(comdist.soil.family, names.soil.sp, names.soil.cz, squared = TRUE)
+```
+
+####map
+```{r}
+
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(sf)
+library(rgeos)
+library(ggrepel)
+
+world <- ne_countries(scale = "large", returnclass = "sf")
+probdata = tibble(site = c("Pskov Research Institute of Agriculture", "Kamennaya Steppe reserve"),
+                  longitude = c(28.201028, 40.727583), 
+                  latitude =  c(57.845611, 51.028222), 
+                  xlabel = c(35, 41), 
+                  ylabel = c(57.2, 51.5))
+
+rivers <- ne_download(scale = 50, type = 'rivers_lake_centerlines', category = 'physical', returnclass = "sf")
+lakes <- ne_download(scale = 50, type = 'lakes', category = 'physical', returnclass = "sf")
+
+ggplot(data = world) + 
+  geom_sf() +
+  geom_sf(data = rivers, colour = "blue" , alpha = 0.3 ) + 
+  geom_sf(data = lakes, fill = "blue", alpha = 0.5 ) +
+  coord_sf(xlim = c(20, 50), ylim = c(40, 70), expand = FALSE) +
+  geom_point(data = probdata, aes(x = longitude, y = latitude), size = 3, 
+  shape = 20, colour = "red") +
+  geom_text(data = probdata, aes(x = xlabel, y = ylabel, label =site), size = 3.2) + 
+  theme_bw() 
+ 
 ```

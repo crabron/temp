@@ -1,6 +1,8 @@
 ls | grep XXX | xargs cp -t  ~/storage/XXX/
 ls | grep kimeklis_K_ | xargs cp -t  ~/storage/krim_chrono/in
 
+setwd("~/storage/Ant_cr/16S/")
+
 require(dada2)
 require(Biostrings)
 require(DECIPHER)
@@ -54,20 +56,21 @@ alignment <- AlignSeqs(DNAStringSet(dna.ref), anchor=NA,verbose=FALSE, processor
 writeXStringSet(alignment, file="align.fasta")
 
 #assign with DECIPER
-# with 1000 bootstrap
-dna <- DNAStringSet(getSequences(seqtab.nochim)) # Create a DNAStringSet from the ASVs
-ids <- IdTaxa(dna, trainingSet, bootstraps = 1000, strand="top", processors=NULL, verbose=FALSE) # use all processors
-ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
-# Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
-taxa.dec <- t(sapply(ids, function(x) {
-  m <- match(ranks, x$rank)
-  taxa.dec <- x$taxon[m]
-  taxa.dec[startsWith(taxa.dec, "unclassified_")] <- NA
-  taxa.dec
-}))
-colnames(taxa.dec) <- ranks; rownames(taxa.dec) <- getSequences(seqtab.nochim)
+# # with 1000 bootstrap
+# dna <- DNAStringSet(getSequences(seqtab.nochim)) # Create a DNAStringSet from the ASVs
+# ids <- IdTaxa(dna, trainingSet, bootstraps = 1000, strand="top", processors=NULL, verbose=FALSE) # use all processors
+# ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
+# # Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+# taxa.dec <- t(sapply(ids, function(x) {
+#   m <- match(ranks, x$rank)
+#   taxa.dec <- x$taxon[m]
+#   taxa.dec[startsWith(taxa.dec, "unclassified_")] <- NA
+#   taxa.dec
+# }))
+# colnames(taxa.dec) <- ranks; rownames(taxa.dec) <- getSequences(seqtab.nochim)
 
 #with 100 bootstrap
+
 ids.100 <- IdTaxa(dna, trainingSet, bootstraps = 100, strand="top", processors=NULL, verbose=FALSE) # use all processors
 ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
 taxa.dec.100 <- t(sapply(ids.100, function(x) {
@@ -170,3 +173,36 @@ plot(ids.100)
 
 trainingSet$problemGroups
 
+require(dada2)
+require(Biostrings)
+require(DECIPHER)
+require(phyloseq)
+require(seqinr)
+require(data.table)
+require(metagMisc)
+require(tibble)
+
+setwd("~/storage/krim_chrono/shit_data/")
+
+filt.otu <-t(as.data.frame(fread("filtered_table.txt")))
+first <-  filt.otu[1,]
+filt.otu <- filt.otu[-c(1),]
+colnames(filt.otu) <-  first
+class(filt.otu) <- "numeric"
+filt.otu.matrix <- as.matrix(filt.otu)
+#head.col <- scan("head.txt", character(), quote = "")
+#rownames(filt.otu.matrix) <- head.col
+tree <- read_tree(treefile="tree.nwk")
+
+mapp <- read.csv("krim_agro_full.csv" , header=TRUE, sep="\t")
+map <- data.frame(row.names="ID", mapp)
+
+taxa <- read.csv("taxa.rdp.txt" , header=TRUE, sep="\t", row.names = "X")
+taxa <- as.matrix(taxa)
+ps <- phyloseq(otu_table(filt.otu.matrix, taxa_are_rows=FALSE), 
+               sample_data(map), 
+               tax_table(taxa),
+               phy_tree(tree))
+ps
+
+saveRDS(ps, file = "~/storage/plates/ps.krim_chrono.rds")

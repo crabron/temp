@@ -104,6 +104,7 @@ kate.ggcca.species <- function(vare.cca){
 }
 
 
+load("~/storage/r-base_files/svir.RData")
 
 fdat <- fortify(vare.cca)
 kate.ggcca.species(vare.cca.wd)
@@ -120,10 +121,13 @@ p.sites <- ggplot(fdat_ch %>% filter(Score %in% c("species","biplot"))) + geom_p
   geom_text_repel(data = fdat_ch %>% dplyr::filter(Score == "species"), aes(x=CCA1, y=CCA2, label= tax, colour=phylum),size=4) 
 p <- p.sites + theme(legend.position = "right", legend.title = element_blank(), panel.background = element_rect(fill = "white", colour = "grey50"))
 p
-
- p + scale_color_manual(values=c("cadetblue", "darkblue", "darkcyan", "darkgreen", "darkred", "darkorange", "darksalmon", "lawngreen", "orange", "lightblue", "mediumblue", "orchid", "sienna","indianred")
-
-                      
+library(ggplot2)
+p2 <- p + scale_color_manual(values=c("#5EA09E", "#6B440B", "#F499C2", "#7DA9D8", "#FEF898", "#0000FE", "#F27204", 
+                                "#FE0000", "#FEFF00", "#02F30E", "#F89679", "#7F8000", "black","black"))
+p
+load("~/storage/r-base_files/mal_cca.RData")
+saveRDS(p2, file = "~/storage/see_some_results/kate_cca_plot")
+                     
 adonis.pair<-function(dist.mat,Factor,nper=1000,corr.method="fdr"){
   require(vegan)
   as.factor(Factor)

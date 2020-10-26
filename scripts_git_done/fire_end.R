@@ -1,4 +1,14 @@
 #for fires article the lastest endlesses code
+map
+data.2 <- data.frame(lapply(map, function(x) gsub("C", "B", x)))
+data.3 <-  data.frame(lapply(data.2, function(x) gsub("Bontrol", "Control", x))) 
+
+rownames(data.3) <- rownames(map)
+class(data.2)
+ps.f.mod <- ps.f
+ps.f@sam_data
+sample_data(ps.f.mod) <- data.3
+
 
 beta_custom_norm_NMDS <- function(ps, seed = 6788, normtype="vst", color="Cd", shape="Drought"){
   require(phyloseq)
@@ -49,12 +59,15 @@ beta_custom_norm_NMDS <- function(ps, seed = 6788, normtype="vst", color="Cd", s
   
   return(ordination.b)
 }
+
+shIsh_Ec0-vEct0r
 library(ggforce)
-p = plot_ordination(ps.f, ord.test.b, type="sample", shape = "Site", title="NMDS - Bray-Curtis", 
+library(ggpubr)
+p = plot_ordination(ps.f.mod, ord.test.b, type="Повторность", shape = "Тип_пожара", title="NMDS - Bray-Curtis", 
                     axes = c(1,2) ) + theme_bw() + theme(text = element_text(size = 14)) + geom_point(size = 3) 
 p
-p + geom_mark_ellipse(aes(group = Repeats, label = Repeats))
-
+p + geom_mark_ellipse(aes(group = Повторность, label = Повторность))
+ps.f@sam_data
 
 
 alpha.custom <- function(ps.f.i, arrga = "PD"){
@@ -67,7 +80,7 @@ alpha.custom <- function(ps.f.i, arrga = "PD"){
   bmi.pairs <- combn(seq_along(bmi), 2, simplify = FALSE, FUN = function(i)bmi[i])
   p1 <- ggviolin(pd, x = "Horizont", y = arrga,
                  add = "boxplot", fill = "Horizont") + stat_compare_means(comparisons = bmi.pairs, method = "wilcox.test") +
-    scale_x_discrete(limits = c("AY", "AC","C")) + theme(axis.title.x = element_blank(), legend.title = element_blank())
+    scale_x_discrete(limits = c("AY", "AB","B")) + theme(axis.title.x = element_blank(), legend.title = element_blank())
   return(p1)
 }
 
@@ -82,7 +95,7 @@ p.alpha.wt.is <- alpha.custom(ps.f.i.wt, arrga = "InvSimpson")
 p.alpha.wt.pd <- alpha.custom(ps.f.i.wt, arrga = "PD")
 
 p1 <- ggarrange(p.alpha.Cdt.oo, p.alpha.Cdt.sh,p.alpha.Cdt.is, p.alpha.Cdt.pd , ncol = 4 ,label.x = 0.105, nrow = 1, common.legend = TRUE)
-
+p1
 
 x = rnorm(50)
 hist(ps.f@otu_table, breaks = seq(min(x), max(x), length.out = 11))
@@ -90,7 +103,7 @@ hist(ps.f@otu_table, breaks = seq(min(x), max(x), length.out = 11))
 
 ps.group <- merge_samples(ps.f, "Repeats", fun=median)
 otus.td.group <- as.data.frame(t(ps.group@otu_table@.Data))
-colnames(otus.td.group)
+colnames(otus.td.group) <- c("AB.Control" , "AB.High_fire", "AB.Low_fire",  "AY.Control",   "AY.High_fire", "AY.Low_fire",  "B.Control"  ,  "B.High_fire" , "B.Low_fire"  )
 
 part.hist.fire <- function(otus, column, nameee){
   x <- otus.td.group[column]/sum(otus.td.group[column])*100
@@ -105,21 +118,29 @@ part.hist.fire <- function(otus, column, nameee){
   return(p)
 }
 library(ggpubr)
-p1 <- part.hist.fire(otus.td.group, "AY.Control", "AY control")
-p2 <- part.hist.fire(otus.td.group, "AY.High_fire", "AY crown fire")
-p3 <- part.hist.fire(otus.td.group, "AY.Low_fire","AY surface fire")
-p4 <- part.hist.fire(otus.td.group, "AC.Control","AC control")
-p5 <- part.hist.fire(otus.td.group, "AC.High_fire","AC crown fire")
-p6 <- part.hist.fire(otus.td.group, "AC.Low_fire", "AC surface fire")
+p1 <- part.hist.fire(otus.td.group, "AY.Control", "AY контроль")
+p2 <- part.hist.fire(otus.td.group, "AY.High_fire", "AY верховой пожар")
+p3 <- part.hist.fire(otus.td.group, "AY.Low_fire","AY низовой пожар")
+p4 <- part.hist.fire(otus.td.group, "AB.Control","AB контроль")
+p5 <- part.hist.fire(otus.td.group, "AB.High_fire","AB верховой пожар")
+p6 <- part.hist.fire(otus.td.group, "AB.Low_fire", "AB низовой пожар")
 
 p <- ggarrange(p1, p2, p3, p4, p5, p6, ncol = 3, nrow = 2)
 p
 
-real <- read.csv("Real_eng.csv" , header=TRUE, sep="\t")
+real <- read.csv("storage/fire/raw_fires/new2_dada/Real_eng.csv" , header=TRUE, sep="\t")
 real <- data.frame(real)
-real$wildfire <- factor(real$wildfire,levels = c("control", "crown", "surface"))
-real$horizon <- factor(real$horizon,levels = c("AY", "AC", "C"))
-ggplot(real, aes(x=horizon, y=Amount)) + 
+real$wildfire
+real$Тип.пожара <- factor(real$wildfire,levels = c("control", "crown", "surface"))
+real$Горизонт <- factor(real$horizon,levels = c("AY", "AB", "B"))
+  ggplot(real, aes(x=horizon, y=Amount)) + 
   geom_point() + geom_errorbar(real, mapping=aes( ymin = Ошибка_низ, ymax=Ошибка_верх),width=0.1, size=0.5, )+ facet_grid(wildfire~Domain) +
   theme_bw()+ theme(panel.grid = element_blank()) 
 library(ggplot2)
+
+
+#Part about pH
+# PERMANOVA?
+
+ps.f@sam_data
+

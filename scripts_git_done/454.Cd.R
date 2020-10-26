@@ -87,7 +87,7 @@ filt.otu <- filt.otu[-c(1),]
 colnames(filt.otu) <-  first
 class(filt.otu) <- "numeric"
 filt.otu.matrix <- as.matrix(filt.otu)
-#head.col <- scan("head.txt", character(), quote = "")
+#head.col <- scan("head.txt", character(), quote = 1  q211  `q2w312`  1q2q2 q22121q q21`  q2wq  qw  qw  we"")
 #rownames(filt.otu.matrix) <- head.col
 tree <- read_tree(treefile="tree.nwk")
 

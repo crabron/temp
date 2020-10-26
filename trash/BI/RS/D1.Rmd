@@ -1,0 +1,304 @@
+---
+title: "BI_RS_WP_1"
+author: "NA"
+date: "26 10 2020"
+output: html_document
+---
+
+```{r}
+options(width = 2000)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+## Загружаемые библиотеки
+
+```{r}
+require(viridis)
+require(plyr)
+require(stringr)
+require(ggplot2)
+require(dplyr)
+require(tidyr)
+require(readr)
+```
+
+## Пользовательская функция
+path - путь
+Т.к. колонка с Sex имеет тенденцию импортироваться в numeric - принудительный импорт в character
+
+```{r}
+path <- "~/server/trash/BI/RS/D1"
+
+input_all_csv_with_sex_column_function <- function(path){
+  require(plyr)
+  require(readr)
+  filenames <- list.files(path, pattern = "*.csv", full.names=TRUE)
+  names(filenames) <- basename(filenames)
+  dataset <- ldply(filenames,
+                   read_csv,
+                   col_types = cols('Sex (1 – male, 2 – female, 3 – uvenil)' = col_character())
+                   )
+  return(dataset)
+}
+
+dataset <- input_all_csv_with_sex_column_function(path)
+```
+
+Альтернативная палитра.
+
+```{r, eval=FALSE}
+plasma_pal <- c(viridis::plasma(n = 6))
+plasma_pal
+```
+
+## Предобработка
+### Названия и формат данных
+
+Часть значений содержит ошибки, перевод данных в factor, далее замена.
+Изменение названия некоторых колонок(Sex, id) на более читаемые.
+Перевод формата данных в нужные форматы.
+Rings - integer
+Sex - factor
+остальные - numeric.
+
+
+```{r}
+data_n <-  dataset %>% rename(Sex = starts_with("Sex"), ID = .id) %>% 
+  mutate(Sex = as.factor(as.character(Sex))) %>% 
+  mutate(Sex = recode(Sex, "1" = "male", "2" = "female", "3" = "uvenil", "one" = "male", "three" = "uvenil")) %>% 
+  mutate(ID = str_sub(ID, end = -5)) %>% 
+  mutate(ID = as.factor(ID)) %>% 
+  mutate(Rings = as.factor(Rings)) %>% 
+  mutate(Rings = as.integer(recode(Rings, "nine" = "9"))) %>% 
+  mutate(Length = as.double(Length))
+
+head(data_n)
+```
+### NA
+Вывод всех строк, содержащих NA.
+Всего 21 строка - нет нескольких пропущенных значений на одной строке.
+Нецелесообразно удалять наблюдения.
+Для того, чтобы получить 2 балла за отсутсвия предупреждений добавлен dataframe без NA.
+
+```{r, rows.print = 10}
+data_n %>% filter_all(any_vars(is.na(.)))
+data_n_w_na <- data_n %>% filter_all(all_vars(!is.na(.)))
+```
+
+## Вылетающие значения
+### Общий boxplot
+
+Rings - временно выкинуть, посмотреть отдельно.
+Выглядит неестественно, нет вылетающих значений, похоже на полимодальное.
+
+```{r, fig.height=5, fig.width=13}
+
+data_num <- data_n %>% select_if(., is.numeric)
+boxplot(data_num)
+```
+### Обзорный boxplot
+
+Односторонние хвосты. Для веса - направо, для размеров - налево.
+Вылетающих значений мало, всё выглядит замечательно и нормально(для биологически данных).
+
+```{r, fig.height=9, fig.width=14}
+boxplot(data_num[,-1])
+```
+
+
+
+### Вес от пола
+Как зависит вес от пола. Молодые весят меньше.
+
+```{r, fig.height=4, fig.width=5}
+ggplot(filter(data_n_w_na, !is.na(Sex))) + 
+  geom_boxplot(aes(y = Whole_weight, x = Sex)) +
+  theme_bw()
+```
+
+## Как параметры зависят друг от друга?
+
+Масса и размерность связаны нелинейно.
+Количество колец бимодально.
+Факторы одинаковых типов(размеры и вес) - связаны линейно.
+
+```{r, fig.height=10, fig.width=14}
+plot(data_num)
+```
+### Какие у нас вообще распределения?
+
+Везде что-то напоминающее пуассона, кроме Rings.
+Данные по весу(ассиметрия направо) и данные по динейным размерам(ассиметрия налево) распределены сходным образом.
+
+```{r, fig.height=9, fig.width=14}
+data_num_w_na <- data_num %>% filter_all(all_vars(!is.na(.)))
+ggplot(gather(data_num_w_na), aes(x = value)) + 
+    geom_histogram(aes(y=..density..), bins = 50, colour="black", fill="white") + 
+    geom_density(color = "#6A00A8FF", fill = "#FCA636FF", alpha = 0.2) +
+    facet_wrap(~key, scales = 'free_x') +
+    theme_bw() +
+      theme(text=element_text(size=20),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15)
+        )
+```
+
+
+### Странный параметр Rings
+
+Rings - бимодальный.
+В правом пике - где колец больше - больше молодых особей.
+Возможно у старых особей кольца на краю раковины сливаются, и их становится труднее подсчитать?
+
+```{r, fig.height=5, fig.width=6}
+ggplot(data_n_w_na, aes(x=Rings, color=Sex)) +
+  scale_fill_viridis_d(option = "plasma", name = "Sex") +
+  scale_colour_viridis_d(option = "plasma", name = "Sex") +
+  geom_histogram(aes(fill=Sex), alpha=0.8,bins = 30 , position="dodge") +
+  theme_bw()
+```
+
+### Странный параметр Rings 2
+
+Предположим, что разныю люди отличаются усидчивостью.
+Тогда разным людям будет по разному лень считать кольца на краю раковины.
+Тогда для разных людей распределение колец будет разным.
+Бимодальность у всех с превалированием большего количества колец у молодых особей по людям на глаз одинаковая.
+
+```{r, fig.height=12, fig.width=16}
+ggplot(data_n_w_na, aes(x=Rings, color=Sex)) +
+  scale_fill_viridis_d(option = "plasma", name = "Sex") +
+  scale_colour_viridis_d(option = "plasma", name = "Sex") +
+  geom_histogram(aes(fill=Sex), alpha=0.8,bins = 30 , position="dodge") +
+  facet_wrap(~ID, scales = 'free_x') +
+  theme_bw()
+```
+
+## Задания
+### Среднее и sd
+
+Среднее значение и стандартное отклонение переменной Length для
+моллюсков разного пола.
+
+```{r}
+data_n %>% 
+  filter(!is.na(Sex)) %>% 
+  group_by(Sex) %>%
+  summarize(
+  m = mean(Length, na.rm=TRUE),
+  sd = sd(Length, na.rm=TRUE)
+) 
+```
+
+
+###Высота и процент
+
+У какого процента моллюсков значение переменной Height не превышает 0.165?
+
+```{r}
+n_height_165 <- data_n %>% filter(Height <= 0.165) %>% nrow
+n_height_165/nrow(data_n)*100
+
+```
+
+### Длина и процент
+
+Чему равняется значение переменной Length, которое больше, чем у 92% от всех
+наблюдений?
+
+```{r}
+sort(data_n$Length)[abs(nrow(data_n)*0.92)]
+```
+
+### Переменная со стандартизацией
+
+Создай новую переменную Lenght_z_scores и сохрани в нее значения переменной
+Length после её стандартизации.
+
+```{r}
+Lenght_z_scores <- scale(data_n$Length)
+```
+
+### Кольца
+
+Сравни между собой диаметр моллюсков с числом колец 5 и 15
+
+```{r}
+data_five <- data_n %>% filter(Rings %in% c(5, 15))
+nrow_5 <- data_five %>% filter(Rings == 5) %>%  nrow
+nrow_15 <- data_five %>% filter(Rings == 15) %>%  nrow
+cat(paste0("число образцов с Rings = 5 -- ", nrow_5, "\n" ,"число образцов с Rings = 15 -- ", nrow_15))
+```
+#### Кольца 2
+
+Моллюсков с кольцами по 15 всего 6. 
+Кроме визуализации я бы не стал использовать никаких других методов.
+Т.к. в требовании было оформление для публикации, шрифт увеличен.
+Кроме того, не было представлено молодых моллюсков с размером раковины 15.
+Средний размер раковины на 15 соответствует размеру раковины на 5.
+
+```{r}
+data_five_gg <- filter(data_five, !is.na(Sex)) %>% mutate(Rings = as.factor(Rings))
+
+ggplot(data = data_five_gg, aes(y = Diameter, x = Rings, fill = Sex)) + 
+  geom_boxplot(position = position_dodge2(width = 0.7, preserve = "single"),outlier.size = 0) + 
+  scale_fill_viridis_d(option = "plasma", name = "Sex") +
+  geom_point(position=position_jitterdodge(dodge.width=0.7, jitter.width =0.1),aes(group=Sex), alpha = 0.5) +
+  labs(y = "Diameter",
+       colour = "Sex",
+       x = "Rings") +
+  theme_bw() +
+  theme(text=element_text(size=30),
+        axis.title.x = element_text(size = 25),
+        axis.title.y = element_text(size = 25),
+        legend.key.size = unit(20, "mm"))
+```
+
+###Diametr и Whole_weight
+####Распределение
+
+Нас особенно интересуют переменные Diametr и Whole_weight. Что ты можешь про
+них сказать?
+
+Распределение.
+Конечно это не нормальное распределение, но это явно вариант распределения, которое сводится к нормальному. 
+
+```{r}
+
+data_d_ww <- data_n %>% select(Whole_weight, Diameter) %>% filter_all(all_vars(!is.na(.)))
+ggplot(gather(data_d_ww), aes(x = value)) + 
+    geom_histogram(aes(y=..density..), bins = 50, colour="black", fill="white") + 
+    geom_density(color = "#6A00A8FF", fill = "#FCA636FF", alpha = 0.2) +
+    facet_wrap(~key, scales = 'free_x') +
+    theme_bw() +
+      theme(text=element_text(size=20),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15)
+        )
+```
+
+#### Простая линейная регрессия
+
+Есть зависимость, достоверная.
+
+```{r}
+lm_d_ww <- lm(data = data_n, Diameter ~ Whole_weight)
+summary(lm_d_ww)
+```
+
+#### Остатки простой линейной регрессии
+
+Распределены более-менее нормально, небольшой хвост, но равномерный, наверное связано с ассиметрией распределений
+
+```{r fig.height=5, fig.width=8}
+plot(lm_d_ww$residuals,main = "Residual Plot")
+```
+
+### Корреляция Пирсона
+
+Сильная, достоверная.
+
+```{r}
+cor.test(data_n$Whole_weight, data_n$Diameter)
+```
+
